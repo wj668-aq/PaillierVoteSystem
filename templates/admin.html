@@ -340,9 +340,9 @@
 
             <!-- 导航标签 -->
             <div class="nav-tabs">
-                <div class="tab active" onclick="switchTab('setup')">⚙️ 选举设置</div>
-                <div class="tab" onclick="switchTab('voting')">🗳️ 投票管理</div>
-                <div class="tab" onclick="switchTab('results')">📊 结果管理</div>
+                <div class="tab active" onclick="switchTab('setup', this)">⚙️ 选举设置</div>
+                <div class="tab" onclick="switchTab('voting', this)">🗳️ 投票管理</div>
+                <div class="tab" onclick="switchTab('results', this)">📊 结果管理</div>
             </div>
 
             <!-- 选举设置标签 -->
@@ -353,9 +353,9 @@
                         <label for="electionTitle">选举标题:</label>
                         <input type="text" id="electionTitle" placeholder="请输入选举标题（如：班级班长选举）" value="班级班长选举">
                     </div>
-                    <button onclick="createElection()" class="btn-primary">
+                    <button id="createElectionBtn" onclick="createElection(this)" class="btn-primary">
                         🆕 创建新的选举活动
-                    </button>
+                    </button> 
                 </div>
 
                 <div class="section">
@@ -364,7 +364,7 @@
                         <label for="candidateName">候选人姓名:</label>
                         <input type="text" id="candidateName" placeholder="请输入候选人姓名">
                     </div>
-                    <button onclick="addCandidate()" class="btn-success">
+                    <button id="addCandidateBtn" onclick="addCandidate(this)" class="btn-success">
                         ➕ 添加候选人
                     </button>
 
@@ -385,7 +385,7 @@
                 <div class="section">
                     <h3>🔐 加密系统初始化</h3>
                     <p>初始化Paillier同态加密系统，为每个候选人创建加密计数器</p>
-                    <button onclick="initializeSystem()" class="btn-warning">
+                    <button id="initSystemBtn" onclick="initializeSystem(this)" class="btn-warning">
                         🔄 初始化加密系统
                     </button>
                 </div>
@@ -412,9 +412,17 @@
                 </div>
 
                 <div class="section">
+                    <h3>📝 凭证申请管理</h3>
+                    <p>显示当前等待管理员审批的凭证申请，您可以选择颁发或拒绝。</p>
+                    <div id="credentialRequestsContainer">
+                        <p style="color:#7f8c8d;">无待处理的凭证申请。</p>
+                    </div>
+                </div>
+
+                <div class="section">
                     <h3>⏹️ 结束投票</h3>
                     <p>结束投票过程并开始Paillier同态计票</p>
-                    <button onclick="endVotingAndCount()" class="btn-danger">
+                    <button id="endVotingBtn" onclick="endVotingAndCount(this)" class="btn-danger">
                         🏁 结束投票并计票
                     </button>
                 </div>
@@ -476,7 +484,7 @@
         let currentElectionData = {{ election_data | tojson }};
 
         // 标签切换
-        function switchTab(tabName) {
+        function switchTab(tabName, el) {
             // 隐藏所有标签内容
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
@@ -488,7 +496,7 @@
             // 显示选中的标签内容
             document.getElementById(tabName).classList.add('active');
             // 设置选中的标签为active
-            event.currentTarget.classList.add('active');
+            if (el && el.classList) el.classList.add('active');
         }
 
         // 显示消息
@@ -504,17 +512,16 @@
         }
 
         // 创建选举
-        async function createElection() {
+        async function createElection(button) {
             const title = document.getElementById('electionTitle').value.trim();
             if (!title) {
                 showMessage('请输入选举标题', 'error');
                 return;
             }
 
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '🔄 创建中...';
+            const btn = button || document.getElementById('createElectionBtn');
+            const originalText = btn ? btn.innerHTML : ''; 
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 创建中...'; }
 
             try {
                 const response = await fetch('/admin', {
@@ -536,23 +543,21 @@
             } catch (error) {
                 showMessage('网络错误: ' + error.message, 'error');
             } finally {
-                button.disabled = false;
-                button.innerHTML = originalText;
+                if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
             }
         }
 
         // 添加候选人
-        async function addCandidate() {
+        async function addCandidate(button) {
             const name = document.getElementById('candidateName').value.trim();
             if (!name) {
                 showMessage('请输入候选人姓名', 'error');
                 return;
             }
 
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '🔄 添加中...';
+            const btn = button || document.getElementById('addCandidateBtn');
+            const originalText = btn ? btn.innerHTML : ''; 
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 添加中...'; }
 
             try {
                 const response = await fetch('/admin', {
@@ -575,8 +580,7 @@
             } catch (error) {
                 showMessage('网络错误: ' + error.message, 'error');
             } finally {
-                button.disabled = false;
-                button.innerHTML = originalText;
+                if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
             }
         }
 
@@ -602,11 +606,10 @@
         }
 
         // 初始化系统
-        async function initializeSystem() {
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '🔄 初始化中...';
+        async function initializeSystem(button) {
+            const btn = button || document.getElementById('initSystemBtn');
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 初始化中...'; }
 
             try {
                 const response = await fetch('/admin', {
@@ -628,21 +631,19 @@
             } catch (error) {
                 showMessage('网络错误: ' + error.message, 'error');
             } finally {
-                button.disabled = false;
-                button.innerHTML = originalText;
+                if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
             }
         }
 
         // 结束投票并计票
-        async function endVotingAndCount() {
+        async function endVotingAndCount(button) {
             if (!confirm('确定要结束投票吗？此操作不可逆转！')) {
                 return;
             }
 
-            const button = event.target;
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '🔄 计票中...';
+            const btn = button || document.getElementById('endVotingBtn');
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 计票中...'; }
 
             try {
                 const response = await fetch('/admin', {
@@ -665,8 +666,7 @@
             } catch (error) {
                 showMessage('网络错误: ' + error.message, 'error');
             } finally {
-                button.disabled = false;
-                button.innerHTML = originalText;
+                if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
             }
         }
 
@@ -703,6 +703,9 @@
                 displaySecretShares(currentElectionData.secret_shares);
             }
 
+            // 加载凭证申请列表
+            fetchCredentialRequests();
+
             // 添加键盘事件
             document.getElementById('electionTitle').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') createElection();
@@ -712,6 +715,98 @@
                 if (e.key === 'Enter') addCandidate();
             });
         };
+
+        // 获取凭证申请列表（管理员）
+        async function fetchCredentialRequests() {
+            try {
+                const resp = await fetch('/credential_requests');
+                if (!resp.ok) throw new Error('无法获取凭证申请列表');
+                const data = await resp.json();
+                if (!data.success) throw new Error(data.message || '获取失败');
+                renderCredentialRequests(data.requests || []);
+            } catch (err) {
+                console.error('fetchCredentialRequests 错误:', err);
+            }
+        }
+
+        function renderCredentialRequests(requests) {
+            const container = document.getElementById('credentialRequestsContainer');
+            container.innerHTML = '';
+            if (!requests || requests.length === 0) {
+                container.innerHTML = '<p style="color:#7f8c8d;">无待处理的凭证申请。</p>';
+                return;
+            }
+
+            requests.forEach(req => {
+                const div = document.createElement('div');
+                div.className = 'share-item';
+                div.innerHTML = `
+                    <div><strong>申请人:</strong> ${req.voter_id}</div>
+                    <div style="margin-top:8px;"><strong>状态:</strong> ${req.status}</div>
+                    <div style="margin-top:8px;"><strong>提交时间:</strong> ${req.created_at}</div>
+                    <div style="margin-top:8px; word-break:break-all;"><strong>盲化消息:</strong> <div class="share-value">${req.blinded}</div></div>
+                    <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+                        ${req.status === 'approved' ? `<div style="flex:1"><strong>签名:</strong> <div class="share-value" style="display:inline-block; max-width:60%;">${req.signature}</div></div><button onclick="copySignature('${req.signature}')" class="btn-primary">复制签名</button>` : `<button onclick="approveRequest('${req.voter_hash}')" class="btn-success">颁发凭证</button><button onclick="denyRequest('${req.voter_hash}')" class="btn-danger">拒绝申请</button>`}
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        async function approveRequest(voter_hash) {
+            if (!confirm('确定要为该申请颁发凭证吗？')) return;
+            try {
+                const form = new FormData();
+                form.append('action', 'approve_request');
+                form.append('voter_hash', voter_hash);
+                const resp = await fetch('/admin', { method: 'POST', body: form });
+                const data = await resp.json();
+                if (data.success) {
+                    showMessage('凭证已签发，签名已保存。', 'success');
+                    if (data.signature) {
+                        try {
+                            navigator.clipboard.writeText(data.signature);
+                            showMessage('签名已复制到剪贴板。', 'success');
+                        } catch (e) {
+                            // ignore clipboard errors
+                        }
+                    }
+                    fetchCredentialRequests();
+                } else {
+                    showMessage('操作失败: ' + data.message, 'error');
+                }
+            } catch (err) {
+                showMessage('网络错误: ' + err.message, 'error');
+            }
+        }
+
+        async function denyRequest(voter_hash) {
+            if (!confirm('确定要拒绝该申请吗？')) return;
+            try {
+                const form = new FormData();
+                form.append('action', 'deny_request');
+                form.append('voter_hash', voter_hash);
+                const resp = await fetch('/admin', { method: 'POST', body: form });
+                const data = await resp.json();
+                if (data.success) {
+                    showMessage('已拒绝该申请。', 'success');
+                    fetchCredentialRequests();
+                } else {
+                    showMessage('操作失败: ' + data.message, 'error');
+                }
+            } catch (err) {
+                showMessage('网络错误: ' + err.message, 'error');
+            }
+        }
+
+        function copySignature(sig) {
+            try {
+                navigator.clipboard.writeText(sig);
+                showMessage('签名已复制到剪贴板。', 'success');
+            } catch (e) {
+                showMessage('复制失败', 'error');
+            }
+        }
     </script>
 </body>
 </html>

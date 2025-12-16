@@ -341,12 +341,12 @@
                 <p>请选择是否将选举结果公示给所有投票人：</p>
 
                 <div class="publication-options">
-                    <div class="publication-option" onclick="selectPublicationOption('public')">
+                    <div class="publication-option" onclick="selectPublicationOption('public', this)">
                         <h4>✅ 公示结果</h4>
                         <p>所有投票人都可以在结果页面查看最终选举结果</p>
                         <small>选择此项后，结果将立即对所有人可见</small>
                     </div>
-                    <div class="publication-option" onclick="selectPublicationOption('private')">
+                    <div class="publication-option" onclick="selectPublicationOption('private', this)">
                         <h4>🔒 暂不公示</h4>
                         <p>结果暂时保密，只有管理员可以查看</p>
                         <small>选择此项后，可以稍后公示结果</small>
@@ -647,7 +647,7 @@
         }
 
         // 选择公示选项
-        function selectPublicationOption(option) {
+        function selectPublicationOption(option, el) {
             console.log("选择公示选项:", option);
 
             if (isPublicationConfirmed) {
@@ -658,12 +658,12 @@
             selectedPublicationOption = option;
 
             // 移除之前的选择
-            document.querySelectorAll('.publication-option').forEach(el => {
-                el.classList.remove('selected');
+            document.querySelectorAll('.publication-option').forEach(item => {
+                item.classList.remove('selected');
             });
 
             // 设置当前选择
-            event.currentTarget.classList.add('selected');
+            if (el && el.classList) el.classList.add('selected');
 
             // 显示确认对话框
             showConfirmationDialog(option);

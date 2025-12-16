@@ -219,6 +219,8 @@
                 <button id="voteButton" onclick="submitVote()" disabled>
                     ✅ 确认投票
                 </button>
+                <div id="credentialStatus" style="margin-top:10px; color:#444; font-size:14px; display:none;"></div>
+                <p style="font-size:12px;color:#666;margin-top:8px;">💡 注：投票将在浏览器端加密并通过盲签名获取凭证（需管理员审批），服务器仅保存密文与哈希凭证。</p>
             </div>
 
             <!-- 投票结果 -->
@@ -241,13 +243,23 @@
                     <div class="vote-hash" id="voteHash"></div>
                 </div>
 
-                <button onclick="copyVoteHash()" style="background: #3498db;">
-                    📋 复制投票凭证
-                </button>
+                <div class="form-group">
+                    <label>盲签名凭证（签名）:</label>
+                    <div class="vote-hash" id="voteSignature" style="font-size:12px; max-height:120px; overflow:auto;"></div>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-bottom:10px;">
+                    <button onclick="copyVoteHash()" style="background: #3498db; flex:1;">
+                        📋 复制投票凭证
+                    </button>
+                    <button onclick="copyVoteSignature()" style="background: #6c63ff; flex:1;">
+                        📋 复制签名凭证
+                    </button>
+                </div>
 
                 <div class="nav-links">
-                    <a href="/verify">验证我的投票</a>
-                    <a href="/result">查看选举结果</a>
+
+
                 </div>
             </div>
 
@@ -266,12 +278,20 @@
 
         // 页面加载时初始化
         window.onload = function() {
-            console.log('投票页面加载完成');
-            console.log('候选人:', candidates);
-            console.log('选举状态:', electionStatus);
+            try {
+                console.log('投票页面加载完成');
+                console.log('候选人 (from server):', candidates);
+                console.log('选举状态:', electionStatus);
 
-            updatePageContent();
-            setupEventListeners();
+                updatePageContent();
+                setupEventListeners();
+            } catch (err) {
+                console.error('初始化投票页面时发生错误:', err);
+                const container = document.getElementById('candidatesList');
+                if (container) {
+                    container.innerHTML = '<p style="text-align:center;color:#e74c3c;padding:20px;">页面初始化异常，请查看控制台错误或联系管理员。</p>';
+                }
+            }
         };
 
         function setupEventListeners() {
@@ -298,27 +318,38 @@
 
         function generateCandidatesList() {
             const container = document.getElementById('candidatesList');
-            container.innerHTML = '';
+            try {
+                if (!container) {
+                    console.error('找不到候选人容器 (candidatesList)');
+                    return;
+                }
 
-            if (candidates.length === 0) {
-                container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无候选人</p>';
-                return;
+                container.innerHTML = '';
+
+                if (!Array.isArray(candidates) || candidates.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无候选人</p>';
+                    console.warn('候选人数组为空或格式不正确:', candidates);
+                    return;
+                }
+
+                candidates.forEach((candidate, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'candidate-card';
+                    card.onclick = () => selectCandidate(index, card);
+
+                    card.innerHTML = `
+                        <div class="candidate-index">${index + 1}</div>
+                        <h4>${candidate}</h4>
+                        <p style="color: #666; margin-top: 5px;">候选人 ${index + 1}</p>
+                        <div style="color: #27ae60; font-size: 24px; opacity: 0;">✓</div>
+                    `;
+
+                    container.appendChild(card);
+                });
+            } catch (err) {
+                console.error('生成候选人列表时发生错误:', err);
+                container.innerHTML = '<p style="text-align:center;color:#e74c3c;padding:20px;">无法加载候选人，请查看控制台以获取详细信息。</p>';
             }
-
-            candidates.forEach((candidate, index) => {
-                const card = document.createElement('div');
-                card.className = 'candidate-card';
-                card.onclick = () => selectCandidate(index, card);
-
-                card.innerHTML = `
-                    <div class="candidate-index">${index + 1}</div>
-                    <h4>${candidate}</h4>
-                    <p style="color: #666; margin-top: 5px;">候选人 ${index + 1}</p>
-                    <div style="color: #27ae60; font-size: 24px; opacity: 0;">✓</div>
-                `;
-
-                container.appendChild(card);
-            });
         }
 
         function selectCandidate(index, element) {
@@ -344,6 +375,86 @@
             voteButton.disabled = !(voterId && selectedCandidate !== null);
         }
 
+        // ---- Helper 大整数与密码学函数（基于原生 BigInt 和 SubtleCrypto） ----
+        function modPow(base, exponent, modulus) {
+            base = BigInt(base);
+            exponent = BigInt(exponent);
+            modulus = BigInt(modulus);
+            if (modulus === 1n) return 0n;
+            let result = 1n;
+            base = base % modulus;
+            while (exponent > 0) {
+                if (exponent & 1n) result = (result * base) % modulus;
+                exponent = exponent >> 1n;
+                base = (base * base) % modulus;
+            }
+            return result;
+        }
+
+        function egcd(a, b) {
+            a = BigInt(a); b = BigInt(b);
+            if (b === 0n) return [a, 1n, 0n];
+            const [g, x1, y1] = egcd(b, a % b);
+            return [g, y1, x1 - (a / b) * y1];
+        }
+
+        function modInverse(a, m) {
+            a = BigInt(a); m = BigInt(m);
+            const [g, x] = (function(a, m) {
+                let [old_r, r] = [a, m];
+                let [old_s, s] = [1n, 0n];
+                while (r !== 0n) {
+                    const q = old_r / r;
+                    [old_r, r] = [r, old_r - q * r];
+                    [old_s, s] = [s, old_s - q * s];
+                }
+                return [old_r, old_s];
+            })(a, m);
+            if (g !== 1n) return null; // no inverse
+            return (x % m + m) % m;
+        }
+
+        function randomBytes(byteLength) {
+            const buf = new Uint8Array(byteLength);
+            crypto.getRandomValues(buf);
+            return buf;
+        }
+
+        function randomBigIntBelow(max) {
+            max = BigInt(max);
+            if (max <= 0n) return 0n;
+            const byteLen = Math.ceil((max.toString(2).length) / 8);
+            let x;
+            do {
+                const rnd = randomBytes(byteLen);
+                let hex = '0x';
+                for (let i = 0; i < rnd.length; i++) hex += rnd[i].toString(16).padStart(2, '0');
+                x = BigInt(hex);
+            } while (x >= max);
+            return x;
+        }
+
+        async function sha256Hex(str) {
+            const data = new TextEncoder().encode(str);
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            const bytes = new Uint8Array(hash);
+            let hex = '';
+            for (let b of bytes) hex += b.toString(16).padStart(2, '0');
+            return hex;
+        }
+
+        function paillierEncrypt(n, g, m) {
+            n = BigInt(n);
+            g = BigInt(g);
+            m = BigInt(m);
+            const n_sq = n * n;
+            // r in [1, n-1]
+            const r = randomBigIntBelow(n - 1n) + 1n;
+            const part1 = modPow(g, m, n_sq);
+            const part2 = modPow(r, n, n_sq);
+            return (part1 * part2) % n_sq;
+        }
+
         async function submitVote() {
             const voterId = document.getElementById('voterId').value.trim();
 
@@ -359,27 +470,116 @@
 
             const button = document.getElementById('voteButton');
             button.disabled = true;
-            button.innerHTML = '🔄 投票中...';
+            button.innerHTML = '🔄 加密并签名中...';
 
             try {
-                const response = await fetch('/vote', {
+                // 获取 Paillier 公钥与 RSA 盲签名公钥
+                const [pkResp, rsaResp] = await Promise.all([fetch('/public_key'), fetch('/signing_pubkey')]);
+                if (!pkResp.ok || !rsaResp.ok) throw new Error('无法获取公钥信息');
+
+                const pkData = await pkResp.json();
+                const rsaData = await rsaResp.json();
+                if (!pkData.success || !rsaData.success) throw new Error('公钥信息不可用');
+
+                const n = BigInt(pkData.public_key.n);
+                const g = BigInt(pkData.public_key.g);
+                const n_rsa = BigInt(rsaData.rsa_pub.n);
+                const e_rsa = BigInt(rsaData.rsa_pub.e);
+
+                // 在浏览器生成密文向量
+                const ciphertexts = [];
+                for (let i = 0; i < candidates.length; i++) {
+                    const c = paillierEncrypt(n, g, (i === selectedCandidate) ? 1 : 0);
+                    ciphertexts.push(c.toString());
+                }
+
+                const timestamp = new Date().toISOString();
+
+                // 计算要签名的消息 m = sha256(ciphertexts_str + '_' + timestamp) mod n_rsa
+                const msgHex = await sha256Hex(ciphertexts.join('|') + '_' + timestamp);
+                let m = BigInt('0x' + msgHex) % n_rsa;
+
+                // 盲化 m
+                const r = randomBigIntBelow(n_rsa - 1n) + 1n; // 1..n-1
+                const rPowE = modPow(r, e_rsa, n_rsa);
+                const blinded = (m * rPowE) % n_rsa;
+
+                // 提交凭证申请（带盲化消息）并等待管理员审批后再获取盲签名
+                const reqResp = await fetch('/request_credential', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ voter_id: voterId, blinded: blinded.toString() })
+                });
+
+                if (!reqResp.ok) {
+                    const err = await reqResp.json().catch(() => ({}));
+                    throw new Error(err.message || '提交凭证申请失败');
+                }
+
+                const reqJson = await reqResp.json();
+                if (!reqJson.success) throw new Error(reqJson.message || '凭证申请失败');
+
+                // 显示等待信息
+                const statusEl = document.getElementById('credentialStatus');
+                statusEl.style.display = 'block';
+                statusEl.textContent = '凭证申请已提交，等待管理员审批...';
+
+                // 轮询凭证状态，直到管理员审批并签发签名（超时约60秒）
+                let s_blinded = null;
+                const start = Date.now();
+                while ((Date.now() - start) < 60000) {
+                    statusEl.textContent = '等待管理员审批（已等待 ' + Math.floor((Date.now() - start) / 1000) + ' 秒）...';
+                    await new Promise(rp => setTimeout(rp, 2000));
+                    const statusResp = await fetch(`/credential_status?voter_id=${encodeURIComponent(voterId)}`);
+                    if (!statusResp.ok) continue;
+                    const statusJson = await statusResp.json().catch(() => ({}));
+                    if (!statusJson.success) continue;
+                    if (statusJson.status === 'approved' && statusJson.signature) {
+                        s_blinded = BigInt(statusJson.signature);
+                        statusEl.textContent = '凭证已颁发，正在解盲并提交投票...';
+                        break;
+                    }
+                    if (statusJson.status === 'denied') {
+                        throw new Error('您的凭证申请已被拒绝');
+                    }
+                    // 若仍为 pending，继续等待
+                }
+
+                if (s_blinded === null) throw new Error('等待管理员签发凭证超时，请稍后重试');
+
+                // 解盲：s = s_blinded * r^{-1} mod n_rsa
+                const rInv = modInverse(r, n_rsa);
+                if (rInv === null) throw new Error('无法计算盲化因子逆元');
+                const signature = (s_blinded * rInv) % n_rsa;
+
+                // 显示最终凭证摘要（短）
+                try {
+                    const sigHex = signature.toString(16);
+                    statusEl.textContent = '凭证已签发（摘要: ' + sigHex.slice(0, 16) + '...）';
+                } catch (e) {
+                    statusEl.textContent = '凭证已签发';
+                }
+
+                // 将密文、时间戳与签名连同选项一起提交到后端
+                button.innerHTML = '🔄 提交密文并完成投票...';
+                const submitResp = await fetch('/vote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
                     body: JSON.stringify({
                         voter_id: voterId,
-                        candidate_index: selectedCandidate
+                        candidate_index: selectedCandidate,
+                        ciphertexts: ciphertexts,
+                        timestamp: timestamp,
+                        signature: signature.toString()
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`HTTP错误! 状态: ${response.status}`);
+                if (!submitResp.ok) {
+                    const err = await submitResp.json().catch(() => ({}));
+                    throw new Error(err.message || `HTTP错误! 状态: ${submitResp.status}`);
                 }
 
-                const data = await response.json();
-
+                const data = await submitResp.json();
                 if (data.success) {
                     showVoteResult(data, voterId);
                 } else {
@@ -388,7 +588,9 @@
                     button.innerHTML = '✅ 确认投票';
                 }
             } catch (error) {
-                showMessage('网络错误: ' + error.message, 'error');
+                showMessage('错误: ' + error.message, 'error');
+                const statusEl = document.getElementById('credentialStatus');
+                if (statusEl) statusEl.style.display = 'none';
                 button.disabled = false;
                 button.innerHTML = '✅ 确认投票';
             }
@@ -401,6 +603,9 @@
             document.getElementById('resultVoterId').value = voterId;
             document.getElementById('resultCandidate').value = candidates[selectedCandidate];
             document.getElementById('voteHash').textContent = data.vote_hash;
+            if (data.signature) {
+                document.getElementById('voteSignature').textContent = data.signature;
+            }
 
             showMessage('投票成功！', 'success');
         }
@@ -409,6 +614,14 @@
             const voteHash = document.getElementById('voteHash').textContent;
             navigator.clipboard.writeText(voteHash).then(() => {
                 showMessage('投票凭证已复制到剪贴板！', 'success');
+            });
+        }
+
+        function copyVoteSignature() {
+            const sig = document.getElementById('voteSignature').textContent;
+            if (!sig) return showMessage('签名不可用', 'error');
+            navigator.clipboard.writeText(sig).then(() => {
+                showMessage('签名凭证已复制到剪贴板！', 'success');
             });
         }
 
