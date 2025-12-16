@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安全选举系统 - 结果揭示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        .main-content {
+            padding: 30px;
+        }
+        .step {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid #3498db;
+            transition: transform 0.3s ease;
+        }
+        .step:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .step-number {
+            background: #3498db;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+        .step-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        .status-pending { background: #f39c12; color: white; }
+        .status-completed { background: #27ae60; color: white; }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+        }
+        button {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .result-display {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            display: none;
+        }
+        .publication-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .publication-option {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .publication-option:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+        }
+        .publication-option.selected {
+            border-color: #27ae60;
+            background: #d4edda;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .nav-links {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 10px 20px;
+            border: 2px solid #3498db;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: #3498db;
+            color: white;
+        }
+
+        /* 确认对话框样式 */
+        .confirmation-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .confirmation-content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        .confirmation-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .confirm-btn {
+            background: #28a745;
+            color: white;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .cancel-btn {
+            background: #dc3545;
+            color: white;
+            padding: 10px 25px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .confirm-btn:hover, .cancel-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            .publication-options {
+                grid-template-columns: 1fr;
+            }
+            .confirmation-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔓 结果揭示</h1>
+            <p>双因素验证揭示选举结果</p>
+        </div>
+
+        <div class="main-content">
+            <!-- 消息提示 -->
+            <div id="successMessage" class="alert alert-success"></div>
+            <div id="errorMessage" class="alert alert-error"></div>
+
+            <!-- 步骤1: 导员部分解密 -->
+            <div class="step">
+                <div class="step-header">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div class="step-number">1</div>
+                        <h3>👨‍🏫 导员部分解密</h3>
+                    </div>
+                    <span id="teacherStepStatus" class="step-status status-pending">待完成</span>
+                </div>
+                <div class="form-group">
+                    <label for="teacherShare">导员共享分片:</label>
+                    <input type="text" id="teacherShare" placeholder="请输入导员共享分片">
+                </div>
+                <button onclick="teacherPartialDecrypt()" id="teacherDecryptBtn">
+                    🔑 执行导员部分解密
+                </button>
+                <div id="teacherPartialResult" class="result-display">
+                    <strong>导员部分解密结果:</strong>
+                    <div id="teacherPartialData"></div>
+                </div>
+            </div>
+
+            <!-- 步骤2: 团支书部分解密 -->
+            <div class="step">
+                <div class="step-header">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div class="step-number">2</div>
+                        <h3>👨‍💼 团支书部分解密</h3>
+                    </div>
+                    <span id="secretaryStepStatus" class="step-status status-pending">待完成</span>
+                </div>
+                <div class="form-group">
+                    <label for="secretaryShare">团支书共享分片:</label>
+                    <input type="text" id="secretaryShare" placeholder="请输入团支书共享分片">
+                </div>
+                <button onclick="secretaryPartialDecrypt()" id="secretaryDecryptBtn">
+                    🔑 执行团支书部分解密
+                </button>
+                <div id="secretaryPartialResult" class="result-display">
+                    <strong>团支书部分解密结果:</strong>
+                    <div id="secretaryPartialData"></div>
+                </div>
+            </div>
+
+            <!-- 步骤3: 合并解密结果 -->
+            <div class="step">
+                <div class="step-header">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div class="step-number">3</div>
+                        <h3>🔄 合并解密结果</h3>
+                    </div>
+                    <span id="combineStepStatus" class="step-status status-pending">待完成</span>
+                </div>
+                <p>合并导员和团支书的部分解密结果，得到最终票数</p>
+                <button onclick="combineDecryptions()" id="combineButton" disabled>
+                    🔄 合并解密结果
+                </button>
+            </div>
+
+            <!-- 步骤4: 结果公示选择 -->
+            <div class="step">
+                <div class="step-header">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div class="step-number">4</div>
+                        <h3>📢 结果公示选择</h3>
+                    </div>
+                    <span id="publicationStatus" class="step-status status-pending">待选择</span>
+                </div>
+                <p>请选择是否将选举结果公示给所有投票人：</p>
+
+                <div class="publication-options">
+                    <div class="publication-option" onclick="selectPublicationOption('public')">
+                        <h4>✅ 公示结果</h4>
+                        <p>所有投票人都可以在结果页面查看最终选举结果</p>
+                        <small>选择此项后，结果将立即对所有人可见</small>
+                    </div>
+                    <div class="publication-option" onclick="selectPublicationOption('private')">
+                        <h4>🔒 暂不公示</h4>
+                        <p>结果暂时保密，只有管理员可以查看</p>
+                        <small>选择此项后，可以稍后公示结果</small>
+                    </div>
+                </div>
+
+                <!-- 确认对话框 -->
+                <div id="confirmationModal" class="confirmation-modal">
+                    <div class="confirmation-content">
+                        <h3 id="confirmationTitle">确认您的选择</h3>
+                        <p id="confirmationMessage"></p>
+                        <div class="confirmation-buttons">
+                            <button id="confirmActionBtn" class="confirm-btn">确认</button>
+                            <button id="cancelActionBtn" class="cancel-btn">取消</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 最终结果展示 -->
+            <div id="finalResultSection" class="step" style="display: none;">
+                <!-- 最终结果将通过JavaScript动态生成 -->
+            </div>
+
+            <!-- 导航链接 -->
+            <div class="nav-links">
+                <a href="/admin">管理页面</a>
+                <a href="/result">结果页面</a>
+                <a href="/verify">投票验证</a>
+                <a href="/vote">投票页面</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedPublicationOption = null;
+        let isPublicationConfirmed = false;
+
+        // 页面加载时初始化
+        window.onload = function() {
+            console.log('揭示页面加载完成');
+            checkCurrentPublicationStatus();
+        };
+
+        // 检查当前公示状态
+        function checkCurrentPublicationStatus() {
+            const electionData = {{ election_data | tojson }};
+            console.log('当前选举数据:', electionData);
+
+            if (electionData && electionData.is_public) {
+                showMessage('选举结果已公示', 'success');
+                updateStepStatus('publication', true);
+                isPublicationConfirmed = true;
+
+                // 显示公示成功信息
+                const publicationStep = document.querySelector('.step:nth-child(4)');
+                const successAlert = document.createElement('div');
+                successAlert.className = 'alert alert-success';
+                successAlert.innerHTML = `
+                    <h4>✅ 结果已公示</h4>
+                    <p>选举结果已对所有人可见，投票人可以在 <a href="/result" target="_blank">结果页面</a> 查看最终结果。</p>
+                    <p><small>公示时间：${electionData.public_at ? new Date(electionData.public_at).toLocaleString() : '未知时间'}</small></p>
+                `;
+                publicationStep.appendChild(successAlert);
+            }
+        }
+
+        // 导员部分解密
+        async function teacherPartialDecrypt() {
+            console.log("开始导员部分解密");
+
+            const teacherShare = document.getElementById('teacherShare').value.trim();
+            if (!teacherShare) {
+                showMessage('请输入导员共享分片', 'error');
+                return;
+            }
+
+            const button = document.getElementById('teacherDecryptBtn');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '🔄 解密中...';
+
+            try {
+                const response = await fetch('/reveal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `action=partial_decrypt&share_owner=teacher&share_value=${encodeURIComponent(teacherShare)}`
+                });
+
+                const data = await response.json();
+                console.log('导员部分解密响应:', data);
+
+                if (data.success) {
+                    showMessage('导员部分解密完成！', 'success');
+                    updateStepStatus('teacher', true);
+                    showPartialResult('teacher', data.partial_results);
+                    checkCombineButton();
+                } else {
+                    showMessage('导员部分解密失败：' + data.message, 'error');
+                }
+            } catch (error) {
+                console.error('导员部分解密错误:', error);
+                showMessage('网络错误：' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        // 团支书部分解密
+        async function secretaryPartialDecrypt() {
+            console.log("开始团支书部分解密");
+
+            const secretaryShare = document.getElementById('secretaryShare').value.trim();
+            if (!secretaryShare) {
+                showMessage('请输入团支书共享分片', 'error');
+                return;
+            }
+
+            const button = document.getElementById('secretaryDecryptBtn');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '🔄 解密中...';
+
+            try {
+                const response = await fetch('/reveal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `action=partial_decrypt&share_owner=secretary&share_value=${encodeURIComponent(secretaryShare)}`
+                });
+
+                const data = await response.json();
+                console.log('团支书部分解密响应:', data);
+
+                if (data.success) {
+                    showMessage('团支书部分解密完成！', 'success');
+                    updateStepStatus('secretary', true);
+                    showPartialResult('secretary', data.partial_results);
+                    checkCombineButton();
+                } else {
+                    showMessage('团支书部分解密失败：' + data.message, 'error');
+                }
+            } catch (error) {
+                console.error('团支书部分解密错误:', error);
+                showMessage('网络错误：' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        // 合并解密结果
+        async function combineDecryptions() {
+            console.log("开始合并解密结果");
+
+            const button = document.getElementById('combineButton');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = '🔄 合并中...';
+
+            try {
+                const response = await fetch('/reveal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: 'action=combine_decryptions'
+                });
+
+                const data = await response.json();
+                console.log('合并解密响应:', data);
+
+                if (data.success) {
+                    showMessage('最终结果解密完成！', 'success');
+                    updateStepStatus('combine', true);
+                    displayFinalResults(data.final_results);
+                    showPublicationSection();
+                } else {
+                    showMessage('合并解密失败：' + data.message, 'error');
+                }
+            } catch (error) {
+                console.error('合并解密错误:', error);
+                showMessage('网络错误：' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        // 更新步骤状态
+        function updateStepStatus(step, completed) {
+            const element = document.getElementById(step + 'StepStatus');
+            if (element) {
+                element.className = completed ? 'step-status status-completed' : 'step-status status-pending';
+                element.textContent = completed ? '已完成' : '待完成';
+            }
+        }
+
+        // 显示部分解密结果
+        function showPartialResult(owner, results) {
+            const element = document.getElementById(owner + 'PartialResult');
+            const dataElement = document.getElementById(owner + 'PartialData');
+
+            if (results && results.length > 0) {
+                dataElement.textContent = results.slice(0, 100) + '...';
+                element.style.display = 'block';
+            }
+        }
+
+        // 检查是否可以启用合并按钮
+        function checkCombineButton() {
+            const teacherCompleted = document.getElementById('teacherStepStatus').textContent === '已完成';
+            const secretaryCompleted = document.getElementById('secretaryStepStatus').textContent === '已完成';
+
+            if (teacherCompleted && secretaryCompleted) {
+                document.getElementById('combineButton').disabled = false;
+                updateStepStatus('combine', false);
+            }
+        }
+
+        // 显示最终结果
+        function displayFinalResults(results) {
+            const section = document.getElementById('finalResultSection');
+
+            if (!results || Object.keys(results).length === 0) {
+                section.innerHTML = `
+                    <div class="alert alert-error">
+                        <h3>❌ 未找到结果</h3>
+                        <p>未找到有效的选举结果数据</p>
+                    </div>
+                `;
+                section.style.display = 'block';
+                return;
+            }
+
+            // 计算总票数和找到获胜者
+            const totalVotes = Object.values(results).reduce((sum, votes) => sum + votes, 0);
+            const maxVotes = Math.max(...Object.values(results));
+            const winners = Object.keys(results).filter(candidate => results[candidate] === maxVotes);
+
+            let html = `
+                <h3>🎉 选举结果揭示成功！</h3>
+                <p>Paillier阈值解密完成，以下是最终选举结果：</p>
+
+                ${winners.length === 1 ? `
+                    <div style="font-size: 24px; font-weight: bold; color: #155724; margin: 15px 0;">
+                        🏆 当选班长：${winners[0]} 🏆
+                    </div>
+                ` : `
+                    <div style="font-size: 20px; font-weight: bold; color: #856404; margin: 15px 0;">
+                        ⚖️ 平局：${winners.join('、')} ⚖️
+                    </div>
+                `}
+
+                <p>总票数：${totalVotes} 票</p>
+                <p><small>解密时间：${new Date().toLocaleString()}</small></p>
+
+                <h4 style="margin: 20px 0 10px 0;">详细票数统计：</h4>
+            `;
+
+            // 按票数排序显示
+            Object.entries(results)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([candidate, votes]) => {
+                    const percentage = totalVotes > 0 ? ((votes / totalVotes) * 100).toFixed(1) : 0;
+                    const isWinner = votes === maxVotes && maxVotes > 0;
+
+                    html += `
+                        <div style="margin: 10px 0; padding: 10px; background: white; border-radius: 5px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span style="font-weight: bold;">${candidate}</span>
+                                <span>
+                                    ${votes} 票
+                                    ${isWinner ? '<span class="winner-badge">获胜</span>' : ''}
+                                </span>
+                            </div>
+                            <div class="vote-bar">
+                                <div class="vote-fill" style="width: ${percentage}%">
+                                    ${percentage}%
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+            section.innerHTML = html;
+            section.style.display = 'block';
+        }
+
+        // 显示公示选择区域
+        function showPublicationSection() {
+            const step = document.querySelector('.step:nth-child(4)');
+            step.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 选择公示选项
+        function selectPublicationOption(option) {
+            console.log("选择公示选项:", option);
+
+            if (isPublicationConfirmed) {
+                showMessage('公示选择已经确认，无法修改', 'error');
+                return;
+            }
+
+            selectedPublicationOption = option;
+
+            // 移除之前的选择
+            document.querySelectorAll('.publication-option').forEach(el => {
+                el.classList.remove('selected');
+            });
+
+            // 设置当前选择
+            event.currentTarget.classList.add('selected');
+
+            // 显示确认对话框
+            showConfirmationDialog(option);
+        }
+
+        // 显示确认对话框
+        function showConfirmationDialog(option) {
+            const modal = document.getElementById('confirmationModal');
+            const title = document.getElementById('confirmationTitle');
+            const message = document.getElementById('confirmationMessage');
+
+            if (option === 'public') {
+                title.textContent = '确认公示选举结果';
+                message.innerHTML = `
+                    <p>您即将公示选举结果，所有投票人都可以在结果页面查看最终结果。</p>
+                    <p><strong style="color: #dc3545;">此操作不可逆转，请确认您的选择。</strong></p>
+                `;
+            } else {
+                title.textContent = '确认暂不公示';
+                message.innerHTML = `
+                    <p>您选择暂不公示选举结果，结果将暂时保密。</p>
+                    <p><strong>您可以在稍后重新选择公示结果。</strong></p>
+                `;
+            }
+
+            modal.style.display = 'flex';
+
+            // 设置确认按钮回调
+            document.getElementById('confirmActionBtn').onclick = function() {
+                modal.style.display = 'none';
+                processPublicationOption(option);
+            };
+
+            // 设置取消按钮回调
+            document.getElementById('cancelActionBtn').onclick = function() {
+                modal.style.display = 'none';
+                // 重置选择
+                document.querySelectorAll('.publication-option').forEach(el => {
+                    el.classList.remove('selected');
+                });
+                selectedPublicationOption = null;
+            };
+        }
+
+        // 处理公示选择
+        async function processPublicationOption(option) {
+            const button = document.getElementById('confirmActionBtn');
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = '处理中...';
+
+            try {
+                const action = option === 'public' ? 'make_public' : 'keep_private';
+                const response = await fetch('/reveal', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `action=${action}`
+                });
+
+                const data = await response.json();
+                console.log('公示响应:', data);
+
+                if (data.success) {
+                    showMessage(
+                        option === 'public'
+                            ? '选举结果已成功公示！'
+                            : '已选择暂不公示结果',
+                        'success'
+                    );
+
+                    // 更新界面状态
+                    updatePublicationStatus(option === 'public');
+                } else {
+                    showMessage('操作失败：' + data.message, 'error');
+                }
+            } catch (error) {
+                console.error('确认公示错误:', error);
+                showMessage('网络错误：' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
+            }
+        }
+
+        // 更新公示状态
+        function updatePublicationStatus(isPublic) {
+            updateStepStatus('publication', true);
+            isPublicationConfirmed = true;
+
+            // 显示成功信息
+            const publicationStep = document.querySelector('.step:nth-child(4)');
+            const successAlert = document.createElement('div');
+            successAlert.className = 'alert alert-success';
+
+            if (isPublic) {
+                successAlert.innerHTML = `
+                    <h4>✅ 结果公示成功</h4>
+                    <p>选举结果已对所有人可见，投票人现在可以在 <a href="/result" target="_blank">结果页面</a> 查看最终结果。</p>
+                    <p><small>公示时间：${new Date().toLocaleString()}</small></p>
+                `;
+            } else {
+                successAlert.innerHTML = `
+                    <h4>🔒 结果暂不公示</h4>
+                    <p>选举结果将暂时保密，只有管理员可以查看。</p>
+                    <p>您可以在稍后重新选择公示结果。</p>
+                `;
+            }
+
+            publicationStep.appendChild(successAlert);
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const element = document.getElementById(type === 'error' ? 'errorMessage' : 'successMessage');
+            element.textContent = message;
+            element.style.display = 'block';
+
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+
+        // 添加键盘事件
+        document.getElementById('teacherShare').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') teacherPartialDecrypt();
+        });
+
+        document.getElementById('secretaryShare').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') secretaryPartialDecrypt();
+        });
+    </script>
+</body>
+</html>

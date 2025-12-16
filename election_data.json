@@ -1,0 +1,26 @@
+{
+  "elections": {
+    "c778e38001f1cc5d": {
+      "id": "c778e38001f1cc5d",
+      "title": "班级班长选举",
+      "start_time": "",
+      "end_time": "",
+      "candidates": [],
+      "status": "not_started",
+      "votes": [],
+      "crypto_setup": null,
+      "encrypted_tallies": [],
+      "partial_decryptions": {},
+      "final_results": null,
+      "is_public": false,
+      "created_at": "2025-12-16T19:01:43.005132",
+      "verification_hashes": {},
+      "secret_shares": {},
+      "public_at": null,
+      "total_votes": 0
+    }
+  },
+  "current_election_id": "c778e38001f1cc5d",
+  "key_shares": {},
+  "secret_shares": {}
+}

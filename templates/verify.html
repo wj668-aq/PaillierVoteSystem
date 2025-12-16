@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安全选举系统 - 投票验证</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        .main-content {
+            padding: 30px;
+        }
+        .section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid #f39c12;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(243, 156, 18, 0.4);
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3极速AIcb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .verification-result {
+            display: none;
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 25px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .verification-pass {
+            border-left: 4px solid #27ae60;
+        }
+        .verification-fail {
+            border-left: 4px solid #e74c3c;
+        }
+        .vote-details {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .detail-item {
+            display: flex;
+            margin: 10px 0;
+        }
+        .detail-label {
+            font-weight: bold;
+            min-width: 120px;
+            color: #2c3e50;
+        }
+        .hash-display {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+        .nav-links {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 10px 20px;
+            border: 2px solid #3498db;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: #3498db;
+            color: white;
+        }
+        .info-box {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 投票验证</h1>
+            <p>验证您的投票是否被正确记录和计入结果</p>
+        </div>
+
+        <div class="main-content">
+            <!-- 消息提示 -->
+            <div id="successMessage" class="alert alert-success"></div>
+            <div id="errorMessage" class="alert alert-error"></div>
+
+            <!-- 使用说明 -->
+            <div class="info-box">
+                <h3>如何使用投票验证功能：</h3>
+                <ol style="text-align: left; display: inline-block;">
+                    <li>输入您的学号/工号</li>
+                    <li>输入投票成功后获得的投票凭证哈希值</li>
+                    <li>点击"验证投票"按钮</li>
+                    <li>系统将验证您的投票是否被正确记录</li>
+                </ol>
+                <p><strong>注意：</strong>验证功能只能验证投票记录，无法查看投票结果。结果将在选举结束后公布。</p>
+            </div>
+
+            <!-- 验证表单 -->
+            <div class="section">
+                <h3>📋 投票验证</h3>
+                <div class="form-group">
+                    <label for="voterId">学号/工号：</label>
+                    <input type="text" id="voterId" placeholder="请输入您的学号或工号">
+                </div>
+                <div class="form-group">
+                    <label for="voteHash">投票凭证哈希值：</label>
+                    <input type="text" id="voteHash" placeholder="请输入投票凭证哈希值">
+                    <small style="color: #666; display: block; margin-top: 5px;">投票成功后系统会提供此哈希值，请妥善保存</small>
+                </div>
+                <button onclick="verifyVote()" id="verifyButton">
+                    🔍 验证投票
+                </button>
+            </div>
+
+            <!-- 验证结果 -->
+            <div id="verificationResult" class="verification-result">
+                <!-- 验证结果将通过JavaScript动态生成 -->
+            </div>
+
+            <!-- 导航链接 -->
+            <div class="nav-links">
+                <a href="/vote">返回投票</a>
+                <a href="/result">查看结果</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 验证投票
+        async function verifyVote() {
+            const voterId = document.getElementById('voterId').value.trim();
+            const voteHash = document.getElementById('voteHash').value.trim();
+
+            if (!voterId) {
+                showMessage('请输入您的学号/工号', 'error');
+                return;
+            }
+
+            if (!voteHash) {
+                showMessage('请输入投票凭证哈希值', 'error');
+                return;
+            }
+
+            const button = document.getElementById('verifyButton');
+            button.disabled = true;
+            button.innerHTML = '🔄 验证中...';
+
+            try {
+                const response = await fetch('/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `vote_hash=${encodeURIComponent(voteHash)}&voter_id=${encodeURIComponent(voterId)}`
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showVerificationResult(true, data.message, voterId, voteHash);
+                } else {
+                    showVerificationResult(false, data.message, voterId, voteHash);
+                }
+            } catch (error) {
+                showMessage('网络错误：' + error.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '🔍 验证投票';
+            }
+        }
+
+        // 显示验证结果
+        function showVerificationResult(isValid, message, voterId, voteHash) {
+            const resultSection = document.getElementById('verificationResult');
+
+            if (isValid) {
+                resultSection.className = 'verification-result verification-pass';
+                resultSection.innerHTML = `
+                    <h3>✅ 投票验证成功！</h3>
+                    <p>您的投票已被正确记录和验证</p>
+
+                    <div class="vote-details">
+                        <h4>投票信息详情：</h4>
+                        <div class="detail-item">
+                            <span class="detail-label">投票人ID：</span>
+                            <span>${voterId}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">投票凭证哈希：</span>
+                            <div class="hash-display">${voteHash}</div>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">验证状态：</span>
+                            <span style="color: #28a745; font-weight: bold;">已验证通过</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">验证时间：</span>
+                            <span>${new Date().toLocaleString()}</span>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-success">
+                        <h4>💡 验证结果说明</h4>
+                        <p>您的投票验证成功，说明：</p>
+                        <ul>
+                            <li>✅ 投票记录存在且完整</li>
+                            <li>✅ 投票凭证哈希值匹配</li>
+                            <li>✅ 投票人身份验证通过</li>
+                            <li>✅ 投票数据未被篡改</li>
+                        </ul>
+                        <p><strong>重要提示：</strong>请妥善保存您的投票凭证哈希值，在选举结果公布后可用于验证您的投票是否被正确计入最终结果。</p>
+                    </div>
+                `;
+                showMessage('投票验证成功！', 'success');
+            } else {
+                resultSection.className = 'verification-result verification-fail';
+                resultSection.innerHTML = `
+                    <h3>❌ 投票验证失败</h3>
+                    <p>${message || '投票验证失败'}</p>
+
+                    <div class="vote-details">
+                        <h4>验证失败信息：</h4>
+                        <div class="detail-item">
+                            <span class="detail-label">投票人ID：</span>
+                            <span>${voterId}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">投票凭证哈希：</span>
+                            <div class="hash-display">${voteHash}</div>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">验证状态：</span>
+                            <span style="color: #dc3545; font-weight: bold;">验证失败</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">失败原因：</span>
+                            <span>${message || '未知错误'}</span>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-error">
+                        <h4>🔍 可能的原因</h4>
+                        <ul>
+                            <li>❌ 投票凭证哈希值输入错误</li>
+                            <li>❌ 学号/工号输入错误</li>
+                            <li>❌ 投票记录不存在</li>
+                            <li>❌ 投票数据被篡改</li>
+                            <li>❌ 系统错误</li>
+                        </ul>
+                        <p><strong>建议操作：</strong></p>
+                        <ol>
+                            <li>检查输入的学号/工号和投票凭证是否正确</li>
+                            <li>确认是否成功投过票</li>
+                            <li>如果问题持续存在，请联系系统管理员</li>
+                        </ol>
+                    </div>
+                `;
+                showMessage('投票验证失败：' + message, 'error');
+            }
+
+            resultSection.style.display = 'block';
+
+            // 滚动到结果区域
+            resultSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const element = document.getElementById(type === 'error' ? 'errorMessage' : 'successMessage');
+            element.textContent = message;
+            element.style.display = 'block';
+
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+
+        // 添加键盘事件
+        document.getElementById('voterId').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') document.getElementById('voteHash').focus();
+        });
+
+        document.getElementById('voteHash').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') verifyVote();
+        });
+    </script>
+</body>
+</html>

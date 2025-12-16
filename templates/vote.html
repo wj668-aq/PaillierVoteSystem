@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安全选举系统 - 投票页面</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        .election-info {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        .main-content {
+            padding: 30px;
+        }
+        .section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        .candidates-grid {
+            display: grid;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .candidate-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        .candidate-card:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+        }
+        .candidate-card.selected {
+            border-color: #27ae60;
+            background: #d4edda;
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.3);
+        }
+        .candidate-index {
+            background: #3498db;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin: 0 auto 10px;
+        }
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .vote-result {
+            display: none;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .vote-hash {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            word-break: break-all;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .nav-links {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 10px 20px;
+            border: 2px solid #3498db;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: #3498db;
+            color: white;
+        }
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            .candidates-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗳️ 安全投票系统</h1>
+            <div class="election-info">
+                <h3 id="electionTitle">{{ election_data.title or '暂无活动的选举' }}</h3>
+                <p id="electionStatus">状态: {{ election_data.status or '未开始' }}</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- 消息提示 -->
+            <div id="successMessage" class="alert alert-success"></div>
+            <div id="errorMessage" class="alert alert-error"></div>
+
+            <!-- 投票表单 -->
+            <div id="voteForm">
+                <div class="section">
+                    <h3>🔐 身份验证</h3>
+                    <div class="form-group">
+                        <label for="voterId">学号/工号:</label>
+                        <input type="text" id="voterId" placeholder="请输入您的学号或工号">
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>👥 选择候选人</h3>
+                    <p>请从以下候选人中选择一位（点击选择）：</p>
+                    <div class="candidates-grid" id="candidatesList">
+                        <!-- 候选人将通过JavaScript动态生成 -->
+                    </div>
+                </div>
+
+                <button id="voteButton" onclick="submitVote()" disabled>
+                    ✅ 确认投票
+                </button>
+            </div>
+
+            <!-- 投票结果 -->
+            <div id="voteResult" class="vote-result">
+                <h3>🎉 投票成功！</h3>
+                <p>您的投票已成功记录。请务必保存以下信息：</p>
+
+                <div class="form-group">
+                    <label>投票人ID:</label>
+                    <input type="text" id="resultVoterId" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label>选择的候选人:</label>
+                    <input type="text" id="resultCandidate" readonly>
+                </div>
+
+                <div class="form-group">
+                    <label>投票凭证哈希值:</label>
+                    <div class="vote-hash" id="voteHash"></div>
+                </div>
+
+                <button onclick="copyVoteHash()" style="background: #3498db;">
+                    📋 复制投票凭证
+                </button>
+
+                <div class="nav-links">
+                    <a href="/verify">验证我的投票</a>
+                    <a href="/result">查看选举结果</a>
+                </div>
+            </div>
+
+            <!-- 导航链接 -->
+            <div class="nav-links">
+                <a href="/result">结果页面</a>
+                <a href="/verify">投票验证</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedCandidate = null;
+        let candidates = {{ election_data.get('candidates', []) | tojson }};
+        let electionStatus = '{{ election_data.status or "not_started" }}';
+
+        // 页面加载时初始化
+        window.onload = function() {
+            console.log('投票页面加载完成');
+            console.log('候选人:', candidates);
+            console.log('选举状态:', electionStatus);
+
+            updatePageContent();
+            setupEventListeners();
+        };
+
+        function setupEventListeners() {
+            // 监听学号输入
+            document.getElementById('voterId').addEventListener('input', checkVoteButtonState);
+        }
+
+        function updatePageContent() {
+            const statusElement = document.getElementById('electionStatus');
+
+            // 根据选举状态更新界面
+            if (electionStatus === 'not_started') {
+                statusElement.innerHTML = '状态: <span style="color: orange;">选举尚未开始</span>';
+                disableVoting();
+            } else if (electionStatus === 'finished' || electionStatus === 'revealed') {
+                statusElement.innerHTML = '状态: <span style="color: green;">选举已结束</span>';
+                disableVoting();
+            } else {
+                statusElement.innerHTML = '状态: <span style="color: green;">投票进行中</span>';
+            }
+
+            generateCandidatesList();
+        }
+
+        function generateCandidatesList() {
+            const container = document.getElementById('candidatesList');
+            container.innerHTML = '';
+
+            if (candidates.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">暂无候选人</p>';
+                return;
+            }
+
+            candidates.forEach((candidate, index) => {
+                const card = document.createElement('div');
+                card.className = 'candidate-card';
+                card.onclick = () => selectCandidate(index, card);
+
+                card.innerHTML = `
+                    <div class="candidate-index">${index + 1}</div>
+                    <h4>${candidate}</h4>
+                    <p style="color: #666; margin-top: 5px;">候选人 ${index + 1}</p>
+                    <div style="color: #27ae60; font-size: 24px; opacity: 0;">✓</div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        function selectCandidate(index, element) {
+            // 移除之前的选择
+            document.querySelectorAll('.candidate-card').forEach(card => {
+                card.classList.remove('selected');
+                card.querySelector('div:last-child').style.opacity = '0';
+            });
+
+            // 设置当前选择
+            selectedCandidate = index;
+            element.classList.add('selected');
+            element.querySelector('div:last-child').style.opacity = '1';
+
+            checkVoteButtonState();
+            showMessage(`已选择: ${candidates[index]}`, 'success');
+        }
+
+        function checkVoteButtonState() {
+            const voterId = document.getElementById('voterId').value.trim();
+            const voteButton = document.getElementById('voteButton');
+
+            voteButton.disabled = !(voterId && selectedCandidate !== null);
+        }
+
+        async function submitVote() {
+            const voterId = document.getElementById('voterId').value.trim();
+
+            if (!voterId) {
+                showMessage('请输入您的学号或工号', 'error');
+                return;
+            }
+
+            if (selectedCandidate === null) {
+                showMessage('请选择一位候选人', 'error');
+                return;
+            }
+
+            const button = document.getElementById('voteButton');
+            button.disabled = true;
+            button.innerHTML = '🔄 投票中...';
+
+            try {
+                const response = await fetch('/vote', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        voter_id: voterId,
+                        candidate_index: selectedCandidate
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP错误! 状态: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showVoteResult(data, voterId);
+                } else {
+                    showMessage(data.message, 'error');
+                    button.disabled = false;
+                    button.innerHTML = '✅ 确认投票';
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+                button.disabled = false;
+                button.innerHTML = '✅ 确认投票';
+            }
+        }
+
+        function showVoteResult(data, voterId) {
+            document.getElementById('voteForm').style.display = 'none';
+            document.getElementById('voteResult').style.display = 'block';
+
+            document.getElementById('resultVoterId').value = voterId;
+            document.getElementById('resultCandidate').value = candidates[selectedCandidate];
+            document.getElementById('voteHash').textContent = data.vote_hash;
+
+            showMessage('投票成功！', 'success');
+        }
+
+        function copyVoteHash() {
+            const voteHash = document.getElementById('voteHash').textContent;
+            navigator.clipboard.writeText(voteHash).then(() => {
+                showMessage('投票凭证已复制到剪贴板！', 'success');
+            });
+        }
+
+        function disableVoting() {
+            document.getElementById('voteButton').disabled = true;
+            document.getElementById('voteButton').innerHTML = '❌ 投票已结束';
+
+            document.querySelectorAll('.candidate-card').forEach(card => {
+                card.style.pointerEvents = 'none';
+                card.style.opacity = '0.6';
+            });
+        }
+
+        function showMessage(message, type) {
+            const element = document.getElementById(type === 'error' ? 'errorMessage' : 'successMessage');
+            element.textContent = message;
+            element.style.display = 'block';
+
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>安全选举系统 - 选举结果</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+        .election-status {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: inline-block;
+        }
+        .main-content {
+            padding: 30px;
+        }
+        .section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border-left: 4px solid #3498db;
+            transition: transform 0.3s ease;
+        }
+        .section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .section h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.4em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            display: none;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 25px 0;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-left: 4px solid #3498db;
+        }
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 5px;
+        }
+        .result-item {
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+        .result-item:hover {
+            border-color: #3498db;
+            transform: translateY(-2px);
+        }
+        .vote-bar {
+            height: 30px;
+            background: #e9ecef;
+            border-radius: 15px;
+            margin: 10px 0;
+            overflow: hidden;
+            position: relative;
+        }
+        .vote-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3498db, #2980b9);
+            border-radius: 15px;
+            transition: width 0.8s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 15px;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .winner-badge {
+            background: #e74c3c;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        .winner-section {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 25px 0;
+        }
+        .winner-name {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .nav-links {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .nav-links a {
+            color: #3498db;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 12px 25px;
+            border: 2px solid #3498db;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        .nav-links a:hover {
+            background: #3498db;
+            color: white;
+        }
+        .verification-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 25px;
+            margin: 25px 0;
+            text-align: center;
+            border-left: 4px solid #ffc107;
+        }
+        .btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107, #e0a800);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #218838);
+        }
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-not-started { background: #ffc107; color: #856404; }
+        .status-ready { background: #17a2b8; color: white; }
+        .status-voting { background: #28a745; color: white; }
+        .status-finished { background: #6c757d; color: white; }
+        .status-revealed { background: #9b59b6; color: white; }
+        .info-box {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .counting-completed {
+            background: #e2e3e5;
+            border: 1px solid #d6d8db;
+            color: #383d41;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .results-not-public {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        .public-results {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+            }
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            .winner-name {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 选举结果</h1>
+            <div class="election-status">
+                <h3 id="electionTitle">{{ election_data.title or '暂无活动的选举' }}</h3>
+                <p id="electionStatus">统计中...</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- 消息提示 -->
+            <div id="successMessage" class="alert alert-success"></div>
+            <div id="errorMessage" class="alert alert-error"></div>
+
+            <!-- 投票验证入口 -->
+            <div class="verification-section">
+                <h3>🔍 投票验证</h3>
+                <p>您可以验证自己的投票是否被正确记录和计入结果</p>
+                <a href="/verify" class="btn btn-warning">前往投票验证页面</a>
+                <p><small>输入您的投票凭证哈希值和学号/工号即可验证</small></p>
+            </div>
+
+            <!-- 结果展示区域 -->
+            <div id="resultContent">
+                <!-- 结果内容将通过JavaScript动态生成 -->
+            </div>
+
+            <!-- 导航链接 -->
+            <div class="nav-links">
+                <a href="/vote">返回投票</a>
+                <a href="/verify">投票验证</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let electionData = {{ election_data | tojson }};
+
+        // 页面加载时初始化
+        window.onload = function() {
+            console.log("=== 结果页面加载完成 ===");
+            console.log("选举数据:", electionData);
+            updateResultDisplay();
+        };
+
+        // 更新结果显示
+        function updateResultDisplay() {
+            const statusElement = document.getElementById('electionStatus');
+            const contentElement = document.getElementById('resultContent');
+
+            if (!electionData || !electionData.id) {
+                displayNoElection();
+                return;
+            }
+
+            const status = electionData.status || 'not_started';
+            const isPublic = electionData.is_public || false;
+            const finalResults = electionData.final_results || {};
+
+            // 更新状态显示
+            updateStatusDisplay(statusElement, status);
+
+            // 根据状态和公示状态显示不同内容
+            if (status === 'not_started') {
+                displayNotStarted();
+            } else if (status === 'ready' || status === 'voting') {
+                displayVotingInProgress();
+            } else if (status === 'finished') {
+                displayCountingCompleted();
+            } else if (status === 'revealed') {
+                if (isPublic) {
+                    displayFinalResults(finalResults);
+                } else {
+                    displayResultsNotPublic();
+                }
+            } else {
+                displayCountingCompleted();
+            }
+        }
+
+        function updateStatusDisplay(element, status) {
+            const statusMap = {
+                'not_started': { text: '选举尚未开始', color: '#ffc107', class: 'status-not-started' },
+                'ready': { text: '准备就绪', color: '#17a2b8', class: 'status-ready' },
+                'voting': { text: '投票进行中', color: '#28a745', class: 'status-voting' },
+                'finished': { text: '计票完成', color: '#6c757d', class: 'status-finished' },
+                'revealed': { text: '结果已揭示', color: '#9b59b6', class: 'status-revealed' }
+            };
+
+            const config = statusMap[status] || statusMap['not_started'];
+            element.innerHTML = `状态: <span class="status-badge ${config.class}">${config.text}</span>`;
+        }
+
+        function displayNoElection() {
+            const contentElement = document.getElementById('resultContent');
+            contentElement.innerHTML = `
+                <div class="section">
+                    <h3>📭 没有活动的选举</h3>
+                    <p>当前没有进行中的选举活动</p>
+                    <p>请等待管理员创建选举</p>
+                    <div class="info-box">
+                        <p><strong>当前状态：</strong>无活动选举</p>
+                        <p><strong>下一步：</strong>管理员将创建新的选举活动</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayNotStarted() {
+            const contentElement = document.getElementById('resultContent');
+            contentElement.innerHTML = `
+                <div class="section">
+                    <h3>⏳ 选举尚未开始</h3>
+                    <p>选举活动正在准备中，请耐心等待</p>
+                    <div class="info-box">
+                        <p><strong>当前状态：</strong>选举准备中</p>
+                        <p><strong>下一步：</strong>管理员将初始化加密系统并开始投票</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayVotingInProgress() {
+            const contentElement = document.getElementById('resultContent');
+            const votes = electionData.votes || [];
+            const totalVotes = votes.length;
+
+            contentElement.innerHTML = `
+                <div class="section">
+                    <h3>🗳️ 投票进行中</h3>
+                    <p>选举正在进行中，结果将在投票结束后公示</p>
+                    <p><strong>当前投票人数：${totalVotes} 人</strong></p>
+                    <p><small>为了保护投票的公正性，投票期间不显示实时票数统计</small></p>
+                </div>
+
+                <div class="section">
+                    <h3>🔒 结果保密中</h3>
+                    <p>投票结果目前处于保密状态，只有管理员可以进行计票操作</p>
+                    <p>最终结果将在投票结束后由管理员公示</p>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number">${totalVotes}</div>
+                            <div>当前投票数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${electionData.candidates ? electionData.candidates.length : 0}</div>
+                            <div>候选人数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">进行中</div>
+                            <div>选举状态</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>💡 系统说明</h4>
+                    <p>本系统采用Paillier同态加密技术，确保：</p>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>投票期间不泄露任何票数信息</li>
+                        <li>只有授权管理员可以查看计票结果</li>
+                        <li>最终结果需要双因素验证才能公示</li>
+                        <li>确保投票的公平性和保密性</li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        function displayCountingCompleted() {
+            const contentElement = document.getElementById('resultContent');
+            const votes = electionData.votes || [];
+            const totalVotes = votes.length;
+
+            contentElement.innerHTML = `
+                <div class="section">
+                    <h3>📊 计票已完成</h3>
+                    <p>Paillier同态计票已经完成，等待管理员揭示结果</p>
+                    <p><strong>总投票人数：${totalVotes} 人</strong></p>
+                </div>
+
+                <div class="section">
+                    <h3>🔐 结果待揭示</h3>
+                    <p>选举计票已经完成，但结果尚未揭示</p>
+                    <p>请等待管理员进行双因素验证揭示结果</p>
+                    <p><small>揭示后管理员可以选择是否公示结果</small></p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">${totalVotes}</div>
+                        <div>总投票数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${electionData.candidates ? electionData.candidates.length : 0}</div>
+                        <div>候选人数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${new Date().toLocaleDateString()}</div>
+                        <div>计票日期</div>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>⏳ 下一步操作</h4>
+                    <p>管理员需要在 <a href="/reveal">结果揭示页面</a> 进行双因素验证，然后选择是否公示结果。</p>
+                    <p>一旦结果公示，您将可以在此页面查看详细的选举结果。</p>
+                </div>
+            `;
+        }
+
+        function displayResultsNotPublic() {
+            const contentElement = document.getElementById('resultContent');
+            const votes = electionData.votes || [];
+            const totalVotes = votes.length;
+            const revealedAt = electionData.revealed_at ? new Date(electionData.revealed_at).toLocaleString() : '未知时间';
+
+            contentElement.innerHTML = `
+                <div class="section">
+                    <h3>🔐 结果已揭示但未公示</h3>
+                    <p>选举结果已经通过双因素验证解密，但管理员选择暂不公示</p>
+                    <p><strong>总投票人数：${totalVotes} 人</strong></p>
+                    <p><small>结果揭示时间：${revealedAt}</small></p>
+                </div>
+
+                <div class="section">
+                    <h3>🔒 结果暂不公示</h3>
+                    <p>管理员已选择暂不公示选举结果</p>
+                    <p>结果目前仅对管理员可见</p>
+                    <p><small>如果管理员选择公示结果，您将可以在此查看</small></p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">${totalVotes}</div>
+                        <div>总投票数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${electionData.candidates ? electionData.candidates.length : 0}</div>
+                        <div>候选人数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">已揭示</div>
+                        <div>结果状态</div>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <h4>💡 说明</h4>
+                    <p>管理员可能因为以下原因选择暂不公示结果：</p>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>等待所有相关人员到场</li>
+                        <li>进行最终结果确认</li>
+                        <li>安排正式公布仪式</li>
+                        <li>其他管理考虑</li>
+                    </ul>
+                    <p>请耐心等待管理员的正式公示通知。</p>
+                </div>
+            `;
+        }
+
+        function displayFinalResults(results) {
+            const contentElement = document.getElementById('resultContent');
+            const votes = electionData.votes || [];
+            const candidates = electionData.candidates || [];
+            const publicAt = electionData.public_at ? new Date(electionData.public_at).toLocaleString() : '未知时间';
+            const revealedAt = electionData.revealed_at ? new Date(electionData.revealed_at).toLocaleString() : '未知时间';
+
+            // 计算总票数和找到获胜者
+            const totalVotes = Object.values(results).reduce((sum, votes) => sum + votes, 0);
+            const maxVotes = Math.max(...Object.values(results));
+            const winners = Object.keys(results).filter(candidate => results[candidate] === maxVotes);
+
+            let html = `
+                <div class="winner-section">
+                    <h2>🎉 选举结果已公示</h2>
+                    <p>最终结果已经管理员公示，以下是详细票数统计：</p>
+
+                    ${winners.length === 1 ? `
+                        <div class="winner-name">🏆 当选班长：${winners[0]} 🏆</div>
+                    ` : `
+                        <div class="winner-name" style="color: #856404;">⚖️ 平局：${winners.join('、')} ⚖️</div>
+                    `}
+                    <p>总票数：${totalVotes} 票 | 参与人数：${votes.length} 人</p>
+                    <p><small>揭示时间：${revealedAt} | 公示时间：${publicAt}</small></p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number">${totalVotes}</div>
+                        <div>总票数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${votes.length}</div>
+                        <div>参与人数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${candidates.length}</div>
+                        <div>候选人数</div>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h3>📈 详细票数统计</h3>
+            `;
+
+            // 按票数排序显示
+            const sortedResults = Object.entries(results)
+                .sort((a, b) => b[1] - a[1]);
+
+            sortedResults.forEach(([candidate, votes]) => {
+                const percentage = totalVotes > 0 ? ((votes / totalVotes) * 100).toFixed(1) : 0;
+                const isWinner = votes === maxVotes && maxVotes > 0;
+
+                html += `
+                    <div class="result-item">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <h4 style="margin: 0; flex: 1;">${candidate}</h4>
+                            <div style="font-weight: bold;">
+                                ${votes} 票
+                                ${isWinner ? '<span class="winner-badge">获胜</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="vote-bar">
+                            <div class="vote-fill" style="width: ${percentage}%">
+                                ${percentage}%
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `
+                </div>
+
+                <div class="info-box">
+                    <h4>✅ 结果验证</h4>
+                    <p>您可以使用投票验证功能确认您的投票是否被正确计入结果：</p>
+                    <a href="/verify" class="btn btn-success">验证我的投票</a>
+                    <p><small>输入您的投票凭证哈希值和学号/工号进行验证</small></p>
+                </div>
+
+                <div class="info-box">
+                    <h4>🔐 安全特性说明</h4>
+                    <p>本系统采用Paillier同态加密和阈值解密技术，确保：</p>
+                    <ul style="text-align: left; display: inline-block;">
+                        <li>投票过程完全加密，保护投票隐私</li>
+                        <li>需要导员和团支书双方合作才能解密结果</li>
+                        <li>防止单方篡改或提前查看结果</li>
+                        <li>确保选举的公平性和安全性</li>
+                    </ul>
+                </div>
+            `;
+
+            contentElement.innerHTML = html;
+
+            // 添加动画效果
+            setTimeout(() => {
+                document.querySelectorAll('.vote-fill').forEach(fill => {
+                    const width = fill.style.width;
+                    fill.style.width = '0%';
+                    setTimeout(() => {
+                        fill.style.width = width;
+                    }, 100);
+                });
+            }, 500);
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const element = document.getElementById(type === 'error' ? 'errorMessage' : 'successMessage');
+            element.textContent = message;
+            element.style.display = 'block';
+
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
