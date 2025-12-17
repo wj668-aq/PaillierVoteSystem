@@ -270,48 +270,9 @@
             <div id="successMessage" class="alert alert-success"></div>
             <div id="errorMessage" class="alert alert-error"></div>
 
-            <!-- 步骤1: 导员部分解密 -->
-            <div class="step">
-                <div class="step-header">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div class="step-number">1</div>
-                        <h3>👨‍🏫 导员部分解密</h3>
-                    </div>
-                    <span id="teacherStepStatus" class="step-status status-pending">待完成</span>
-                </div>
-                <div class="form-group">
-                    <label for="teacherShare">导员共享分片:</label>
-                    <input type="text" id="teacherShare" placeholder="请输入导员共享分片">
-                </div>
-                <button onclick="teacherPartialDecrypt()" id="teacherDecryptBtn">
-                    🔑 执行导员部分解密
-                </button>
-                <div id="teacherPartialResult" class="result-display">
-                    <strong>导员部分解密结果:</strong>
-                    <div id="teacherPartialData"></div>
-                </div>
-            </div>
-
-            <!-- 步骤2: 团支书部分解密 -->
-            <div class="step">
-                <div class="step-header">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div class="step-number">2</div>
-                        <h3>👨‍💼 团支书部分解密</h3>
-                    </div>
-                    <span id="secretaryStepStatus" class="step-status status-pending">待完成</span>
-                </div>
-                <div class="form-group">
-                    <label for="secretaryShare">团支书共享分片:</label>
-                    <input type="text" id="secretaryShare" placeholder="请输入团支书共享分片">
-                </div>
-                <button onclick="secretaryPartialDecrypt()" id="secretaryDecryptBtn">
-                    🔑 执行团支书部分解密
-                </button>
-                <div id="secretaryPartialResult" class="result-display">
-                    <strong>团支书部分解密结果:</strong>
-                    <div id="secretaryPartialData"></div>
-                </div>
+            <!-- 步骤1: 管理员提交 Shamir 分片并部分解密（动态生成） -->
+            <div id="sharesContainer">
+                <!-- JS 将在此处根据 election_data.key_shares 动态生成每个管理员的输入与按钮 -->
             </div>
 
             <!-- 步骤3: 合并解密结果 -->
@@ -384,19 +345,32 @@
     <script>
         let selectedPublicationOption = null;
         let isPublicationConfirmed = false;
+        const ELECTION_DATA = {{ election_data | tojson }};
 
         // 页面加载时初始化
         window.onload = function() {
             console.log('揭示页面加载完成');
             checkCurrentPublicationStatus();
+            // 根据 key_shares 动态生成管理员部分解密 UI
+            try { buildSharesUI(); } catch (e) { console.warn('构建分片UI时出错', e); }
+
+            // 回车键在分片输入框上触发提交
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    const active = document.activeElement;
+                    if (active && active.id && active.id.startsWith('share_')) {
+                        const owner = active.id.replace('share_', '');
+                        partialDecrypt(owner);
+                    }
+                }
+            });
         };
 
         // 检查当前公示状态
         function checkCurrentPublicationStatus() {
-            const electionData = {{ election_data | tojson }};
-            console.log('当前选举数据:', electionData);
+            console.log('当前选举数据:', ELECTION_DATA);
 
-            if (electionData && electionData.is_public) {
+            if (ELECTION_DATA && ELECTION_DATA.is_public) {
                 showMessage('选举结果已公示', 'success');
                 updateStepStatus('publication', true);
                 isPublicationConfirmed = true;
@@ -408,99 +382,131 @@
                 successAlert.innerHTML = `
                     <h4>✅ 结果已公示</h4>
                     <p>选举结果已对所有人可见，投票人可以在 <a href="/result" target="_blank">结果页面</a> 查看最终结果。</p>
-                    <p><small>公示时间：${electionData.public_at ? new Date(electionData.public_at).toLocaleString() : '未知时间'}</small></p>
+                    <p><small>公示时间：${ELECTION_DATA.public_at ? new Date(ELECTION_DATA.public_at).toLocaleString() : '未知时间'}</small></p>
                 `;
                 publicationStep.appendChild(successAlert);
             }
         }
 
-        // 导员部分解密
-        async function teacherPartialDecrypt() {
-            console.log("开始导员部分解密");
+        // 通用部分解密函数（按管理员）
+        async function partialDecrypt(owner) {
+            console.log(`开始 ${owner} 部分解密`);
+            const input = document.getElementById('share_' + owner);
+            if (!input) return showMessage('无法找到分片输入框', 'error');
+            const shareVal = input.value.trim();
+            if (!shareVal) return showMessage('请输入共享分片', 'error');
 
-            const teacherShare = document.getElementById('teacherShare').value.trim();
-            if (!teacherShare) {
-                showMessage('请输入导员共享分片', 'error');
-                return;
-            }
-
-            const button = document.getElementById('teacherDecryptBtn');
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '🔄 解密中...';
+            const btn = document.getElementById(owner + 'DecryptBtn');
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 解密中...'; }
 
             try {
                 const response = await fetch('/reveal', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `action=partial_decrypt&share_owner=teacher&share_value=${encodeURIComponent(teacherShare)}`
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `action=partial_decrypt&share_owner=${encodeURIComponent(owner)}&share_value=${encodeURIComponent(shareVal)}`
                 });
-
                 const data = await response.json();
-                console.log('导员部分解密响应:', data);
+                console.log(owner + ' 部分解密响应:', data);
 
                 if (data.success) {
-                    showMessage('导员部分解密完成！', 'success');
-                    updateStepStatus('teacher', true);
-                    showPartialResult('teacher', data.partial_results);
+                    showMessage(`${owner} 分片提交成功！`, 'success');
+                    updateStepStatus(owner, true);
+                    // 更新顶部已提交计数 / 阈值显示
+                    if (typeof data.submitted_shares !== 'undefined' && typeof data.threshold !== 'undefined') {
+                        updateSharesSummary(data.submitted_shares, data.threshold);
+                    }
                     checkCombineButton();
                 } else {
-                    showMessage('导员部分解密失败：' + data.message, 'error');
+                    showMessage(`${owner} 分片提交失败：` + data.message, 'error');
                 }
-            } catch (error) {
-                console.error('导员部分解密错误:', error);
-                showMessage('网络错误：' + error.message, 'error');
+            } catch (err) {
+                console.error(owner + ' 部分解密错误:', err);
+                showMessage('网络错误：' + err.message, 'error');
             } finally {
-                button.disabled = false;
-                button.innerHTML = originalText;
+                if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
             }
         }
 
-        // 团支书部分解密
-        async function secretaryPartialDecrypt() {
-            console.log("开始团支书部分解密");
+        // 根据 key_shares 动态生成 UI
+        function buildSharesUI() {
+            const ks = (ELECTION_DATA && ELECTION_DATA.key_shares) ? ELECTION_DATA.key_shares : null;
+            const container = document.getElementById('sharesContainer');
+            container.innerHTML = '';
 
-            const secretaryShare = document.getElementById('secretaryShare').value.trim();
-            if (!secretaryShare) {
-                showMessage('请输入团支书共享分片', 'error');
+            if (!ks || !ks.shares) {
+                container.innerHTML = `<div class="step"><p style="color:#666;">尚未初始化密钥或分片。请先在管理页面初始化系统。</p></div>`;
                 return;
             }
 
-            const button = document.getElementById('secretaryDecryptBtn');
-            const originalText = button.innerHTML;
-            button.disabled = true;
-            button.innerHTML = '🔄 解密中...';
+            const threshold = ks.threshold || (Object.keys(ks.shares).length);
+            // 顶部显示已提交分片计数 / 阈值
+            const provided = (ELECTION_DATA && ELECTION_DATA.provided_shares) ? ELECTION_DATA.provided_shares : {};
+            const initial_submitted = Object.keys(provided).length;
+            container.innerHTML = `
+                <div class="step">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>📥 分片提交状态</h3>
+                        <div id="sharesSummary" style="font-weight:600;">已提交：${initial_submitted} / ${threshold}</div>
+                    </div>
+                </div>
+            `;
 
-            try {
-                const response = await fetch('/reveal', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: `action=partial_decrypt&share_owner=secretary&share_value=${encodeURIComponent(secretaryShare)}`
+            let idx = 1;
+            Object.keys(ks.shares).forEach(owner => {
+                const entry = ks.shares[owner];
+                const block = document.createElement('div');
+                block.className = 'step';
+                block.innerHTML = `
+                    <div class="step-header">
+                        <div style="display:flex; align-items:center; gap:15px;">
+                            <div class="step-number">${idx}</div>
+                            <h3>🔐 ${owner} 分片提交</h3>
+                        </div>
+                        <span id="${owner}StepStatus" class="step-status status-pending">待完成</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="share_${owner}">${owner} 共享分片 (y) — x = ${entry.x} :</label>
+                        <input type="text" id="share_${owner}" placeholder="请输入 ${owner} 的共享分片 y (x=${entry.x})">
+                    </div>
+                    <button id="${owner}DecryptBtn" onclick="partialDecrypt('${owner}')">🔑 提交分片并验证</button>
+                `;
+                container.appendChild(block);
+                idx += 1;
+            });
+
+            // 初始化时标注已提交的管理员
+            if (provided && Object.keys(provided).length > 0) {
+                Object.keys(provided).forEach(owner => {
+                    updateStepStatus(owner, true);
                 });
+            }
+            // 更新合并按钮状态
+            checkCombineButton();
+        }
 
-                const data = await response.json();
-                console.log('团支书部分解密响应:', data);
+        // 更新检查合并按钮以基于阈值
+        function checkCombineButton() {
+            const ks = (ELECTION_DATA && ELECTION_DATA.key_shares) ? ELECTION_DATA.key_shares : null;
+            if (!ks) return;
+            const threshold = ks.threshold || Object.keys(ks.shares).length;
 
-                if (data.success) {
-                    showMessage('团支书部分解密完成！', 'success');
-                    updateStepStatus('secretary', true);
-                    showPartialResult('secretary', data.partial_results);
-                    checkCombineButton();
-                } else {
-                    showMessage('团支书部分解密失败：' + data.message, 'error');
-                }
-            } catch (error) {
-                console.error('团支书部分解密错误:', error);
-                showMessage('网络错误：' + error.message, 'error');
-            } finally {
-                button.disabled = false;
-                button.innerHTML = originalText;
+            let completed = 0;
+            Object.keys(ks.shares).forEach(owner => {
+                const s = document.getElementById(owner + 'StepStatus');
+                if (s && s.textContent === '已完成') completed += 1;
+            });
+
+            const combineBtn = document.getElementById('combineButton');
+            if (completed >= threshold) {
+                combineBtn.disabled = false;
+                updateStepStatus('combine', false);
+            } else {
+                combineBtn.disabled = true;
+                updateStepStatus('combine', false);
             }
         }
+
 
         // 合并解密结果
         async function combineDecryptions() {
@@ -549,27 +555,18 @@
             }
         }
 
-        // 显示部分解密结果
-        function showPartialResult(owner, results) {
-            const element = document.getElementById(owner + 'PartialResult');
-            const dataElement = document.getElementById(owner + 'PartialData');
-
-            if (results && results.length > 0) {
-                dataElement.textContent = results.slice(0, 100) + '...';
-                element.style.display = 'block';
+        // 更新已提交分片计数 / 阈值显示
+        function updateSharesSummary(submitted, threshold) {
+            const el = document.getElementById('sharesSummary');
+            if (el) {
+                el.textContent = `已提交：${submitted} / ${threshold}`;
             }
         }
 
-        // 检查是否可以启用合并按钮
-        function checkCombineButton() {
-            const teacherCompleted = document.getElementById('teacherStepStatus').textContent === '已完成';
-            const secretaryCompleted = document.getElementById('secretaryStepStatus').textContent === '已完成';
+        // （已存在的 checkCombineButton 会基于已完成状态来启用合并按钮）
+        // 保留单一实现，上层通过比较已完成状态来决定
+        
 
-            if (teacherCompleted && secretaryCompleted) {
-                document.getElementById('combineButton').disabled = false;
-                updateStepStatus('combine', false);
-            }
-        }
 
         // 显示最终结果
         function displayFinalResults(results) {
@@ -788,14 +785,7 @@
             }, 5000);
         }
 
-        // 添加键盘事件
-        document.getElementById('teacherShare').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') teacherPartialDecrypt();
-        });
 
-        document.getElementById('secretaryShare').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') secretaryPartialDecrypt();
-        });
     </script>
 </body>
 </html>

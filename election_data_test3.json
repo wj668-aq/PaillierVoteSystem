@@ -1,0 +1,121 @@
+{
+  "elections": {
+    "6e0faf4ea8200622": {
+      "id": "6e0faf4ea8200622",
+      "title": "测试Shamir2",
+      "start_time": "",
+      "end_time": "",
+      "candidates": [
+        "Alice",
+        "Bob"
+      ],
+      "status": "finished",
+      "votes": [
+        {
+          "voter_hash": "52d3f4c9da646cbfa86616ac70caa4c6beeae36297c7f3f24eb54cd422a555fa",
+          "ciphertexts": [
+            3933584,
+            7017807
+          ],
+          "weight": 1,
+          "timestamp": "2025-12-17T19:33:55.852401",
+          "vote_hash": "f57961d65568ad849e0d3e8d59cc2bdd51fcba24c01e061fed46e7836f0fe1c3",
+          "signature": null
+        },
+        {
+          "voter_hash": "dafce987792c855c4a3b4c1c6e6b1386bb216d25a075796090b64bdcf9a0a6cc",
+          "ciphertexts": [
+            4939207,
+            5202184
+          ],
+          "weight": 1,
+          "timestamp": "2025-12-17T19:33:55.854021",
+          "vote_hash": "d8b0e5742b7ed46bcbc9edbd8a00e3c73e9d64323e86d6dddb471bb95da89063",
+          "signature": null
+        }
+      ],
+      "crypto_setup": {
+        "public_key": [
+          3233,
+          3234
+        ],
+        "encrypted_results": [
+          8692030,
+          1766465
+        ]
+      },
+      "encrypted_tallies": [
+        8692030,
+        1766465
+      ],
+      "partial_decryptions": {},
+      "final_results": null,
+      "is_public": false,
+      "created_at": "2025-12-17T19:33:55.744693",
+      "verification_hashes": {
+        "f57961d65568ad849e0d3e8d59cc2bdd51fcba24c01e061fed46e7836f0fe1c3": {
+          "voter_hash": "52d3f4c9da646cbfa86616ac70caa4c6beeae36297c7f3f24eb54cd422a555fa",
+          "timestamp": "2025-12-17T19:33:55.852401"
+        },
+        "d8b0e5742b7ed46bcbc9edbd8a00e3c73e9d64323e86d6dddb471bb95da89063": {
+          "voter_hash": "dafce987792c855c4a3b4c1c6e6b1386bb216d25a075796090b64bdcf9a0a6cc",
+          "timestamp": "2025-12-17T19:33:55.854021"
+        }
+      },
+      "secret_shares": {
+        "teacher": {
+          "x": 1,
+          "y": "2705"
+        },
+        "secretary": {
+          "x": 2,
+          "y": "2290"
+        },
+        "public_key": "(3233, 3234)",
+        "prime": "6247",
+        "threshold": 2
+      },
+      "public_at": null,
+      "total_votes": 2,
+      "threshold": 2,
+      "credential_requests": [],
+      "voted_hashes": [
+        "dafce987792c855c4a3b4c1c6e6b1386bb216d25a075796090b64bdcf9a0a6cc",
+        "52d3f4c9da646cbfa86616ac70caa4c6beeae36297c7f3f24eb54cd422a555fa"
+      ],
+      "finished_at": "2025-12-17T19:33:55.855522"
+    }
+  },
+  "current_election_id": "6e0faf4ea8200622",
+  "key_shares": {
+    "6e0faf4ea8200622": {
+      "shares": {
+        "teacher": {
+          "x": 1,
+          "y": "2705"
+        },
+        "secretary": {
+          "x": 2,
+          "y": "2290"
+        }
+      },
+      "mu": 2718,
+      "public_key": [
+        3233,
+        3234
+      ],
+      "prime": 6247,
+      "threshold": 2
+    }
+  },
+  "secret_shares": {},
+  "signing_keys": {
+    "6e0faf4ea8200622": {
+      "rsa_pub": {
+        "n": 22860516692629843799717676517989663244750364072525552044423686412829655087942459341924875897573830617488966786401677232911216184722890553644588209045559185319354690594766611918065793497624648155613064692836067393359635600111298976392352163635561168613119424708928573407649088432590445277656646172241517683169118173814073045695110656727017677138045362309550282811968479543732401847480838568945970809058375979877255190043938689355903630407533387779030484182891251369310451769691232313472381920356112513912677406125375057112452287878035819923783784286038695518511961029534697417385988714945433532178680403885991201263951,
+        "e": 65537
+      },
+      "issued": {}
+    }
+  }
+}

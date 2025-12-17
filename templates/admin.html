@@ -380,6 +380,11 @@
                         <label for="electionTitle">选举标题:</label>
                         <input type="text" id="electionTitle" placeholder="请输入选举标题（如：班级班长选举）" value="班级班长选举">
                     </div>
+                    <div class="form-group">
+                        <label for="electionThreshold">Shamir 阈值 (可选):</label>
+                        <input type="number" id="electionThreshold" placeholder="例如 2（默认是多数阈值）">
+                        <small style="color:#666;">如果留空，初始化时会使用多数阈值 (⌈N/2⌉ + 1)</small>
+                    </div>
                     <button id="createElectionBtn" onclick="createElection(this)" class="btn-primary">
                         🆕 创建新的选举活动
                     </button> 
@@ -463,23 +468,10 @@
                         <h4>密钥分片生成成功</h4>
                         <p>请将以下秘密分片安全地分发给相应人员：</p>
 
-                        <div class="share-item">
-                            <strong>导员分片：</strong>
-                            <div id="teacherShareDisplay" class="share-value"></div>
-                        </div>
-
-                        <div class="share-item">
-                            <strong>团支书分片：</strong>
-                            <div id="secretaryShareDisplay" class="share-value"></div>
-                        </div>
-
-                        <div class="share-item">
-                            <strong>公钥：</strong>
-                            <div id="publicKeyDisplay" class="share-value"></div>
-                        </div>
+                        <div id="sharesContainer"></div>
 
                         <div class="alert alert-success">
-                            <strong>注意：</strong>必须同时拥有两个分片才能揭示选举结果。请确保分片的安全保管。
+                            <strong>注意：</strong>请务必通过安全渠道分发分片（例如面对面或加密传输），并保存备份副本。
                         </div>
                     </div>
                 </div>
@@ -551,12 +543,13 @@
             if (btn) { btn.disabled = true; btn.innerHTML = '🔄 创建中...'; }
 
             try {
+                const threshold = document.getElementById('electionThreshold').value.trim();
                 const response = await fetch('/admin', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: `action=create_election&title=${encodeURIComponent(title)}`
+                    body: `action=create_election&title=${encodeURIComponent(title)}&threshold=${encodeURIComponent(threshold)}`
                 });
 
                 const data = await response.json();
@@ -651,6 +644,10 @@
 
                 if (data.success) {
                     showMessage(data.message, 'success');
+                    if (data.key_shares) {
+                        // 初始化后立即展示分片信息
+                        displaySecretShares(Object.assign({}, data.key_shares));
+                    }
                     setTimeout(() => location.reload(), 2000);
                 } else {
                     showMessage(data.message, 'error');
@@ -697,27 +694,71 @@
             }
         }
 
-        // 显示秘密共享分片
+        // 显示秘密共享分片（支持任意管理员数量）
         function displaySecretShares(shares) {
             if (!shares) return;
 
             const section = document.getElementById('secretSharesSection');
-            const teacherDisplay = document.getElementById('teacherShareDisplay');
-            const secretaryDisplay = document.getElementById('secretaryShareDisplay');
-            const publicKeyDisplay = document.getElementById('publicKeyDisplay');
+            const container = document.getElementById('sharesContainer');
+            container.innerHTML = '';
 
-            if (shares.teacher_share) {
-                teacherDisplay.textContent = shares.teacher_share;
-            }
-            if (shares.secretary_share) {
-                secretaryDisplay.textContent = shares.secretary_share;
-            }
-            if (shares.public_key) {
-                publicKeyDisplay.textContent = shares.public_key;
-            }
+            const prime = shares.prime ? shares.prime : null;
+            const threshold = shares.threshold ? shares.threshold : null;
+
+            const meta = document.createElement('div');
+            meta.innerHTML = `
+                <div style="margin-bottom:10px;font-size:14px;color:#444;">Prime: <span class="share-value">${prime}</span></div>
+                <div style="margin-bottom:10px;font-size:14px;color:#444;">阈值 (threshold): <strong>${threshold}</strong></div>
+            `;
+            container.appendChild(meta);
+
+            // 每个管理员分片
+            const sharesMap = shares || {};
+            Object.keys(sharesMap).forEach(key => {
+                if (key === 'prime' || key === 'threshold' || key === 'public_key') return;
+                const v = sharesMap[key];
+                const div = document.createElement('div');
+                div.className = 'share-item';
+                const y = (v && v.y) ? v.y : (v ? v : '');
+                const x = (v && v.x) ? v.x : '';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                        <div><strong>${key}</strong> (x=${x})</div>
+                        <div>
+                            <button onclick="copyText('${y}')" class="btn-info">复制 y</button>
+                            <button onclick="downloadShare('${key}')" class="btn-primary">导出</button>
+                        </div>
+                    </div>
+                    <div class="share-value">${y}</div>
+                `;
+                container.appendChild(div);
+            });
 
             section.style.display = 'block';
-            showMessage('秘密共享分片生成成功！', 'success');
+            showMessage('秘密共享分片生成成功！请立即安全分发给对应管理员。', 'success');
+        }
+
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => showMessage('已复制到剪贴板', 'success'));
+        }
+
+        function downloadShare(owner) {
+            const election = currentElectionData || {};
+            const ks = election.secret_shares || {};
+            const payload = {
+                election_id: election.id,
+                owner: owner,
+                prime: ks.prime || null,
+                threshold: ks.threshold || null,
+                share: ks[owner] || null
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `share_${owner}_${election.id}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         // 页面加载时初始化

@@ -8,7 +8,11 @@ from datetime import datetime
 from math import gcd
 from jinja2 import Undefined
 from functools import wraps
-from cryptography.hazmat.primitives.asymmetric import rsa as _rsa_check  # type: ignore
+try:
+    from cryptography.hazmat.primitives.asymmetric import rsa as _rsa_check  # type: ignore
+    CRYPTOGRAPHY_AVAILABLE = True
+except Exception:
+    CRYPTOGRAPHY_AVAILABLE = False
 
 
 
@@ -102,6 +106,82 @@ class SecureElectionData:
         # 保证可序列化顺序
         return '|'.join(str(c) for c in ciphertexts)
 
+    # ==================== Shamir 秘密分享辅助函数 ====================
+    @staticmethod
+    def _is_probable_prime(n: int) -> bool:
+        """简单的 Miller-Rabin 概率素性检测（适用于本项目演示用途）。"""
+        if n < 2:
+            return False
+        # 小素数快速检验
+        small_primes = [2, 3, 5, 7, 11, 13, 17, 19, 23]
+        for p in small_primes:
+            if n % p == 0:
+                return n == p
+        # 写成 d * 2^s
+        d = n - 1
+        s = 0
+        while d % 2 == 0:
+            d //= 2
+            s += 1
+        # 一组固定基（对常见范围足够）
+        for a in [2, 3, 5, 7, 11]:
+            if a >= n:
+                continue
+            x = pow(a, d, n)
+            if x == 1 or x == n - 1:
+                continue
+            composite = True
+            for _ in range(s - 1):
+                x = pow(x, 2, n)
+                if x == n - 1:
+                    composite = False
+                    break
+            if composite:
+                return False
+        return True
+
+    @staticmethod
+    def _next_prime(start: int) -> int:
+        candidate = max(2, int(start))
+        if candidate % 2 == 0:
+            if candidate == 2:
+                return 2
+            candidate += 1
+        while not SecureElectionData._is_probable_prime(candidate):
+            candidate += 2
+        return candidate
+
+    @staticmethod
+    def _generate_shamir_shares(secret: int, num_shares: int, threshold: int, prime: int):
+        """生成 Shamir 分片，返回 [(x,y), ...]。系数在 [0, prime-1]。"""
+        # 多项式 f(0) = secret
+        coeffs = [secret] + [random.randrange(0, prime) for _ in range(threshold - 1)]
+        shares = []
+        for i in range(1, num_shares + 1):
+            x = i
+            y = 0
+            for power, a in enumerate(coeffs):
+                y = (y + a * pow(x, power, prime)) % prime
+            shares.append((x, y))
+        return shares
+
+    @staticmethod
+    def _lagrange_interpolate_zero(points: list, prime: int) -> int:
+        """使用 Lagrange 在 x=0 处插值，返回 f(0) 模 prime。points 是 [(x,y), ...]"""
+        total = 0
+        for i, (xi, yi) in enumerate(points):
+            num = 1
+            den = 1
+            for j, (xj, _) in enumerate(points):
+                if i == j:
+                    continue
+                num = (num * (-xj)) % prime
+                den = (den * (xi - xj)) % prime
+            inv_den = pow(den, -1, prime)
+            term = yi * num * inv_den
+            total = (total + term) % prime
+        return total
+
 
     def load_data(self):
         """加载选举数据"""
@@ -126,8 +206,11 @@ class SecureElectionData:
             print(f"保存数据错误: {e}")
             return False
 
-    def create_election(self, title, start_time='', end_time=''):
-        """创建新的选举"""
+    def create_election(self, title, start_time='', end_time='', threshold=None):
+        """创建新的选举
+
+        threshold: 可选的 Shamir 阈值（int），若为 None 则在初始化时默认设置为多数阈值
+        """
         try:
             election_id = secrets.token_hex(8)
 
@@ -148,8 +231,9 @@ class SecureElectionData:
                 'verification_hashes': {},
                 'secret_shares': {},
                 'public_at': None,  # 公示时间
-                'total_votes': 0
-                ,
+                'total_votes': 0,
+                # 可配置阈值
+                'threshold': threshold,
                 # 存放凭证申请（用于管理员审批盲签名发放凭证）
                 'credential_requests': []
             }
@@ -222,21 +306,19 @@ class SecureElectionData:
             admin_names = election.get('admin_names', ['teacher', 'secretary'])
             num_admins = len(admin_names)
 
-            # 生成加法式密钥分片（所有分片之和等于lambda_val）
-            shares = []
-            running_sum = 0
-            for i in range(num_admins - 1):
-                s = random.randint(1, lambda_val - 1)
-                shares.append(s)
-                running_sum = (running_sum + s) % lambda_val
+            # 使用 Shamir 秘密共享：选择阈值（可配置），默认为多数门限
+            threshold = election.get('threshold', max(2, (num_admins // 2) + 1))
 
-            last_share = (lambda_val - running_sum) % lambda_val
-            if last_share == 0:
-                # 确保非零分片
-                last_share = lambda_val
-            shares.append(last_share)
+            # 选择一个大素数作为模数（确保 prime > lambda_val）
+            prime = SecureElectionData._next_prime(lambda_val * 2 + 1)
 
-            key_shares = {name: shares[i] for i, name in enumerate(admin_names)}
+            # 生成 Shamir 分片
+            raw_shares = SecureElectionData._generate_shamir_shares(lambda_val, num_admins, threshold, prime)
+            # 把分片映射到管理员（以便管理员知道自己的 x 坐标）
+            key_shares = {}
+            for i, name in enumerate(admin_names):
+                x, y = raw_shares[i]
+                key_shares[name] = {'x': x, 'y': str(y)}
 
             # 强制要求 cryptography 可用（更安全）。若不可用则终止初始化并提示安装。
             if not CRYPTOGRAPHY_AVAILABLE:
@@ -265,14 +347,16 @@ class SecureElectionData:
                 'encrypted_results': encrypted_counters
             }
 
-            # 保存分片到整体数据中（用于验证分片并进行部分解密）
+            # 保存分片到整体数据中（用于验证分片并进行部分解密/合并）
             if 'key_shares' not in self.data:
                 self.data['key_shares'] = {}
 
             self.data['key_shares'][election['id']] = {
                 'shares': key_shares,
                 'mu': mu,
-                'public_key': public_key
+                'public_key': public_key,
+                'prime': prime,
+                'threshold': threshold
             }
 
             # 保存RSA公钥用于盲签名验证（私钥仅保存在内存中）
@@ -281,16 +365,6 @@ class SecureElectionData:
             self.data['signing_keys'][election['id']] = {
                 'rsa_pub': rsa_keys,
                 'issued': {}
-            }
-
-            # 保存分片到整体数据中（用于验证分片并进行部分解密）
-            if 'key_shares' not in self.data:
-                self.data['key_shares'] = {}
-
-            self.data['key_shares'][election['id']] = {
-                'shares': key_shares,
-                'mu': mu,
-                'public_key': public_key
             }
 
             success = self.update_election(election['id'], {
@@ -638,8 +712,12 @@ class SecureElectionData:
                 # 将分片以字符串形式返回以便管理员保存与分发（仅演示用途）
                 shares_map = existing_shares.get('shares', {})
                 for k, v in shares_map.items():
-                    secret_shares[f"{k}_share"] = str(v)
+                    # v 是 {'x': x, 'y': str(y)}，直接映射到 owner 名称
+                    secret_shares[k] = v
+                # 同时导出公钥、prime 与 threshold，便于分发与重构
                 secret_shares['public_key'] = str(existing_shares.get('public_key'))
+                secret_shares['prime'] = str(existing_shares.get('prime'))
+                secret_shares['threshold'] = int(existing_shares.get('threshold', 0))
 
             success = self.update_election(election['id'], {
                 'encrypted_tallies': encrypted_tallies,
@@ -660,7 +738,8 @@ class SecureElectionData:
             return False, f"计票过程中发生错误: {str(e)}", None
 
     def partial_decrypt(self, share_owner, share_value):
-        """部分解密"""
+        """管理员提交其 Shamir 分片并返回该分片的部分解密（用于审计）。
+        share_value 应该是对应管理员在初始化时被分发的 y 值（或其字符串形式）。"""
         try:
             election = self.get_current_election()
             if not election:
@@ -677,59 +756,68 @@ class SecureElectionData:
             if share_owner not in shares_map:
                 return False, "无效的分片所有者", None
 
-            stored_share = shares_map.get(share_owner)
-            if str(share_value) != str(stored_share):
+            stored_entry = shares_map.get(share_owner)
+            stored_y = stored_entry.get('y')
+            stored_x = stored_entry.get('x')
+
+            # 验证提交的分片值
+            try:
+                share_value_int = int(str(share_value))
+            except Exception:
+                return False, "无效的分片格式", None
+
+            if str(share_value_int) != str(stored_y):
                 return False, "共享分片验证失败", None
 
-            # 执行部分解密
-            crypto_setup = election.get('crypto_setup')
-            public_key = crypto_setup['public_key']
-            encrypted_tallies = election.get('encrypted_tallies', [])
+            # 保存管理员已提交的分片，仅保存以便在达到阈值后用于重构私钥
+            provided_shares = election.get('provided_shares', {})
+            provided_shares[share_owner] = {'x': stored_x, 'y': str(share_value_int), 'submitted_at': datetime.now().isoformat()}
 
-            partial_decryptions = []
-            for ciphertext in encrypted_tallies:
-                # 部分解密：c^{share} mod n^2
-                n, g = public_key
-                n_sq = n * n
-                partial_dec = pow(int(ciphertext), int(share_value), n_sq)
-                partial_decryptions.append(partial_dec)
-
-            # 保存部分解密结果
-            partial_decryptions_dict = election.get('partial_decryptions', {})
-            partial_decryptions_dict[share_owner] = partial_decryptions
-
+            # 注意：采用 Shamir 阈值秘密共享时，单个分片不能用来生成可合并的部分解密值。
+            # 因此此处不再计算或保存每个管理员的 c^y 部分解密结果，仅记录已提交的分片。
             success = self.update_election(election['id'], {
-                'partial_decryptions': partial_decryptions_dict
+                'provided_shares': provided_shares
             })
 
             if success:
-                return True, f"{share_owner}部分解密完成", partial_decryptions
+                threshold = int(key_shares_entry.get('threshold', 0))
+                submitted_count = len(provided_shares)
+                return True, f"{share_owner} 分片提交并验证通过", {'submitted_shares': submitted_count, 'threshold': threshold}
             else:
-                return False, "保存部分解密结果失败", None
+                return False, "保存已提交分片失败", None
 
         except Exception as e:
             print(f"部分解密错误: {e}")
             return False, f"部分解密过程中发生错误: {str(e)}", None
 
     def combine_decryptions(self):
-        """合并部分解密结果得到最终结果"""
+        """合并部分解密：基于至少 threshold 个提交的 Shamir 分片重构 lambda（私钥），然后使用重构的 lambda 解密最终结果。"""
         try:
             election = self.get_current_election()
             if not election:
                 return False, "没有活动的选举", None
 
-            partial_decryptions = election.get('partial_decryptions', {})
+            provided_shares = election.get('provided_shares', {})
 
             key_shares_entry = self.data.get('key_shares', {}).get(election['id'], {})
             if not key_shares_entry:
                 return False, "未找到密钥分片信息", None
 
-            shares_map = key_shares_entry.get('shares', {})
-            required_owners = set(shares_map.keys())
-            provided_owners = set(partial_decryptions.keys())
+            threshold = int(key_shares_entry.get('threshold', 0))
+            prime = int(key_shares_entry.get('prime', 0))
 
-            if not required_owners.issubset(provided_owners):
-                return False, f"需要以下管理员的部分解密结果: {', '.join(sorted(required_owners))}", None
+            if len(provided_shares) < threshold:
+                return False, f"需要至少 {threshold} 个管理员提交分片后才能重构私钥并解密", None
+
+            # 收集任意 threshold 个分片用于插值（按提交顺序）
+            points = []
+            for owner, v in provided_shares.items():
+                points.append((int(v['x']), int(v['y'])))
+                if len(points) >= threshold:
+                    break
+
+            # 使用 Lagrange 在 x=0 处插值得到 lambda（模 prime）
+            lambda_reconstructed = SecureElectionData._lagrange_interpolate_zero(points, prime)
 
             crypto_setup = election.get('crypto_setup')
             public_key = crypto_setup['public_key']
@@ -738,30 +826,14 @@ class SecureElectionData:
             n, g = public_key
             n_sq = n * n
 
-            # 合并部分解密结果（将各管理员的部分解密值相乘得到 c^{sum(shares)} = c^{lambda}）
             final_results = {}
             candidates = election.get('candidates', [])
 
-            # 按候选人索引进行合并
             for i, candidate in enumerate(candidates):
-                # 从所有管理员处取第 i 个部分解密
-                combined = 1
-                valid = True
-                for owner in sorted(required_owners):
-                    owner_partial = partial_decryptions.get(owner, [])
-                    if i >= len(owner_partial):
-                        valid = False
-                        break
-                    combined = (combined * int(owner_partial[i])) % n_sq
-
-                if not valid:
-                    continue
-
-                # 最终解密：L(u) * mu mod n
-                u = combined
+                # 直接使用重构的 lambda 进行解密
+                u = pow(int(election.get('encrypted_tallies', [])[i]), int(lambda_reconstructed), n_sq)
                 l_val = (u - 1) // n
                 plaintext = (l_val * mu) % n
-
                 final_results[candidate] = plaintext
 
             success = self.update_election(election['id'], {
@@ -912,10 +984,20 @@ def admin():
 
         if action == 'create_election':
             title = request.form.get('title', '班级班长选举').strip()
+            threshold_val = request.form.get('threshold', '').strip()
+            threshold = None
+            if threshold_val:
+                try:
+                    threshold = int(threshold_val)
+                    if threshold < 1:
+                        return jsonify({'success': False, 'message': '阈值必须为正整数'})
+                except ValueError:
+                    return jsonify({'success': False, 'message': '无效的阈值格式'})
+
             if not title:
                 return jsonify({'success': False, 'message': '请输入选举标题'})
 
-            election_id = election_db.create_election(title)
+            election_id = election_db.create_election(title, threshold=threshold)
             if election_id:
                 return jsonify({
                     'success': True,
@@ -943,7 +1025,18 @@ def admin():
 
         elif action == 'initialize_system':
             success, message = election_db.initialize_system()
-            return jsonify({'success': success, 'message': message})
+            resp = {'success': success, 'message': message}
+            if success:
+                cur = election_db.get_current_election()
+                # 如果初始化成功，返回 key_shares 的可视化信息（不返回私钥）
+                ks_entry = election_db.data.get('key_shares', {}).get(cur['id'], {})
+                if ks_entry:
+                    resp['key_shares'] = {
+                        'shares': ks_entry.get('shares'),
+                        'prime': str(ks_entry.get('prime')) if ks_entry.get('prime') else None,
+                        'threshold': ks_entry.get('threshold')
+                    }
+            return jsonify(resp)
 
         elif action == 'end_voting':
             success, message, shares = election_db.end_voting_and_count()
@@ -1226,14 +1319,16 @@ def reveal_results():
                 print("DEBUG: 分片值不是有效数字")
                 return jsonify({'success': False, 'message': '共享分片必须是数字'})
 
-            success, message, partial_results = election_db.partial_decrypt(share_owner, share_value)
-            print(f"DEBUG: 部分解密结果 - 成功: {success}, 消息: {message}")
+            success, message, resp = election_db.partial_decrypt(share_owner, share_value)
+            print(f"DEBUG: 部分解密结果 - 成功: {success}, 消息: {message}, resp: {resp}")
 
             if success:
+                # 返回已提交分片数量与阈值，以便前端只显示“已提交计数 / 阈值”
                 return jsonify({
                     'success': True,
                     'message': message,
-                    'partial_results': partial_results
+                    'submitted_shares': resp.get('submitted_shares') if isinstance(resp, dict) else None,
+                    'threshold': resp.get('threshold') if isinstance(resp, dict) else None
                 })
             else:
                 return jsonify({'success': False, 'message': message})
@@ -1254,6 +1349,15 @@ def reveal_results():
             return jsonify({'success': success, 'message': message})
 
     current_election = election_db.get_current_election() or {}
+    # 将 key_shares (如果存在) 暴露到模板中以便前端渲染分片界面（只包含必要字段）
+    ks_entry = election_db.data.get('key_shares', {}).get(current_election.get('id', ''), None)
+    if ks_entry:
+        current_election['key_shares'] = {
+            'shares': ks_entry.get('shares'),
+            'prime': ks_entry.get('prime'),
+            'threshold': ks_entry.get('threshold')
+        }
+
     election_data_json = safe_tojson(current_election)
     return render_template('reveal.html',
                            election_data=current_election,
