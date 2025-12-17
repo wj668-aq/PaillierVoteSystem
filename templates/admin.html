@@ -215,6 +215,33 @@
             word-break: break-all;
             margin-top: 5px;
         }
+
+        /* 折叠面板样式：用于盲化消息和签名的可展开查看 */
+        details.request-details {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            margin-top: 8px;
+        }
+        details.request-details[open] {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+        }
+        details.request-details summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 6px;
+            font-weight: 600;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        details.request-details summary::-webkit-details-marker { display: none; }
+        details.request-details summary:after { content: '▸'; transform-origin: 50% 50%; transition: transform 0.2s ease; }
+        details.request-details[open] summary:after { transform: rotate(90deg); }
+
         .nav-tabs {
             display: flex;
             background: #ecf0f1;
@@ -740,13 +767,36 @@
             requests.forEach(req => {
                 const div = document.createElement('div');
                 div.className = 'share-item';
+
+                // 盲化消息折叠面板
+                const blindedDetails = `
+                    <details class="request-details">
+                        <summary>盲化消息</summary>
+                        <div class="share-value">${req.blinded}</div>
+                    </details>
+                `;
+
+                // 签名折叠面板（仅审批通过时显示）
+                let signatureHtml = '';
+                if (req.status === 'approved') {
+                    signatureHtml = `
+                        <details class="request-details">
+                            <summary>签名</summary>
+                            <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+                                <div class="share-value" style="display:inline-block; max-width:60%;">${req.signature}</div>
+                                <button onclick="copySignature('${req.signature}')" class="btn-primary">复制签名</button>
+                            </div>
+                        </details>
+                    `;
+                }
+
                 div.innerHTML = `
                     <div><strong>申请人:</strong> ${req.voter_id}</div>
                     <div style="margin-top:8px;"><strong>状态:</strong> ${req.status}</div>
                     <div style="margin-top:8px;"><strong>提交时间:</strong> ${req.created_at}</div>
-                    <div style="margin-top:8px; word-break:break-all;"><strong>盲化消息:</strong> <div class="share-value">${req.blinded}</div></div>
+                    <div style="margin-top:8px; word-break:break-all;">${blindedDetails}</div>
                     <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
-                        ${req.status === 'approved' ? `<div style="flex:1"><strong>签名:</strong> <div class="share-value" style="display:inline-block; max-width:60%;">${req.signature}</div></div><button onclick="copySignature('${req.signature}')" class="btn-primary">复制签名</button>` : `<button onclick="approveRequest('${req.voter_hash}')" class="btn-success">颁发凭证</button><button onclick="denyRequest('${req.voter_hash}')" class="btn-danger">拒绝申请</button>`}
+                        ${req.status === 'approved' ? signatureHtml : `<button onclick="approveRequest('${req.voter_hash}')" class="btn-success">颁发凭证</button><button onclick="denyRequest('${req.voter_hash}')" class="btn-danger">拒绝申请</button>`}
                     </div>
                 `;
                 container.appendChild(div);

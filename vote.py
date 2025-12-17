@@ -8,14 +8,10 @@ from datetime import datetime
 from math import gcd
 from jinja2 import Undefined
 from functools import wraps
+from cryptography.hazmat.primitives.asymmetric import rsa as _rsa_check  # type: ignore
 
-# 检查可选依赖：cryptography（用于生成更安全的 RSA 密钥）
-try:
-    from cryptography.hazmat.primitives.asymmetric import rsa as _rsa_check  # type: ignore
-    CRYPTOGRAPHY_AVAILABLE = True
-except Exception:
-    CRYPTOGRAPHY_AVAILABLE = False
-    print("警告: 未检测到 'cryptography' 库，盲签名将回退到演示 RSA（不推荐用于生产）。可通过 'pip install cryptography' 安装。")
+
+
 
 
 app = Flask(__name__)
