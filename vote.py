@@ -206,13 +206,17 @@ class SecureElectionData:
             print(f"保存数据错误: {e}")
             return False
 
-    def create_election(self, title, start_time='', end_time='', threshold=None):
+    def create_election(self, title, start_time='', end_time='', threshold=None, admin_names=None):
         """创建新的选举
 
         threshold: 可选的 Shamir 阈值（int），若为 None 则在初始化时默认设置为多数阈值
+        admin_names: 可选的管理员列表（list）
         """
         try:
             election_id = secrets.token_hex(8)
+
+            # 如果未提供管理员名单，使用默认的两个管理员
+            admin_names = admin_names if admin_names else ['teacher', 'secretary']
 
             new_election = {
                 'id': election_id,
@@ -234,6 +238,8 @@ class SecureElectionData:
                 'total_votes': 0,
                 # 可配置阈值
                 'threshold': threshold,
+                # 管理员名单
+                'admin_names': admin_names,
                 # 存放凭证申请（用于管理员审批盲签名发放凭证）
                 'credential_requests': []
             }
@@ -280,6 +286,59 @@ class SecureElectionData:
             return self.update_election(election['id'], {'candidates': candidates})
         except Exception as e:
             print(f"添加候选人错误: {e}")
+            return False
+
+    def add_admin(self, name):
+        """添加管理员（用于分配 Shamir 分片）"""
+        try:
+            election = self.get_current_election()
+            if not election or not election.get('id'):
+                return False
+
+            admins = election.get('admin_names', [])
+            if name in admins:
+                return False
+
+            admins.append(name)
+            return self.update_election(election['id'], {'admin_names': admins})
+        except Exception as e:
+            print(f"添加管理员错误: {e}")
+            return False
+
+    def remove_admin(self, name):
+        """删除管理员"""
+        try:
+            election = self.get_current_election()
+            if not election or not election.get('id'):
+                return False
+
+            admins = election.get('admin_names', [])
+            if name not in admins:
+                return False
+
+            admins = [a for a in admins if a != name]
+            return self.update_election(election['id'], {'admin_names': admins})
+        except Exception as e:
+            print(f"删除管理员错误: {e}")
+            return False
+
+    def edit_admin(self, old_name, new_name):
+        """重命名管理员"""
+        try:
+            election = self.get_current_election()
+            if not election or not election.get('id'):
+                return False
+
+            admins = election.get('admin_names', [])
+            if old_name not in admins:
+                return False
+            if not new_name or new_name in admins:
+                return False
+
+            admins = [new_name if a == old_name else a for a in admins]
+            return self.update_election(election['id'], {'admin_names': admins})
+        except Exception as e:
+            print(f"编辑管理员错误: {e}")
             return False
 
     def initialize_system(self):
@@ -985,6 +1044,7 @@ def admin():
         if action == 'create_election':
             title = request.form.get('title', '班级班长选举').strip()
             threshold_val = request.form.get('threshold', '').strip()
+            admins_val = request.form.get('admins', '').strip()
             threshold = None
             if threshold_val:
                 try:
@@ -994,14 +1054,19 @@ def admin():
                 except ValueError:
                     return jsonify({'success': False, 'message': '无效的阈值格式'})
 
+            # 解析管理员列表（逗号分隔）
+            admin_names = None
+            if admins_val:
+                admin_names = [a.strip() for a in admins_val.split(',') if a.strip()]
+
             if not title:
                 return jsonify({'success': False, 'message': '请输入选举标题'})
 
-            election_id = election_db.create_election(title, threshold=threshold)
+            election_id = election_db.create_election(title, threshold=threshold, admin_names=admin_names)
             if election_id:
                 return jsonify({
                     'success': True,
-                    'message': '新的选举活动创建成功！候选人列表已清空',
+                    'message': '新的选举活动创建成功！候选人和管理员列表已清空',
                     'election_id': election_id
                 })
             else:
@@ -1022,6 +1087,55 @@ def admin():
                 })
             else:
                 return jsonify({'success': False, 'message': '添加候选人失败'})
+
+        elif action == 'add_admin':
+            admin_name = request.form.get('name', '').strip()
+            if not admin_name:
+                return jsonify({'success': False, 'message': '请输入管理员姓名'})
+
+            success = election_db.add_admin(admin_name)
+            if success:
+                current_election = election_db.get_current_election()
+                return jsonify({
+                    'success': True,
+                    'admins': current_election.get('admin_names', []) if current_election else [],
+                    'message': '管理员添加成功！'
+                })
+            else:
+                return jsonify({'success': False, 'message': '添加管理员失败'})
+
+        elif action == 'remove_admin':
+            admin_name = request.form.get('name', '').strip()
+            if not admin_name:
+                return jsonify({'success': False, 'message': '缺少管理员名称'})
+
+            success = election_db.remove_admin(admin_name)
+            if success:
+                current_election = election_db.get_current_election()
+                return jsonify({
+                    'success': True,
+                    'admins': current_election.get('admin_names', []) if current_election else [],
+                    'message': '管理员已删除'
+                })
+            else:
+                return jsonify({'success': False, 'message': '删除管理员失败或管理员不存在'})
+
+        elif action == 'edit_admin':
+            old_name = request.form.get('old_name', '').strip()
+            new_name = request.form.get('new_name', '').strip()
+            if not old_name or not new_name:
+                return jsonify({'success': False, 'message': '请提供旧管理员名和新管理员名'})
+
+            success = election_db.edit_admin(old_name, new_name)
+            if success:
+                current_election = election_db.get_current_election()
+                return jsonify({
+                    'success': True,
+                    'admins': current_election.get('admin_names', []) if current_election else [],
+                    'message': '管理员已更新'
+                })
+            else:
+                return jsonify({'success': False, 'message': '更新管理员失败（可能已存在同名管理员或旧管理员不存在）'})
 
         elif action == 'initialize_system':
             success, message = election_db.initialize_system()

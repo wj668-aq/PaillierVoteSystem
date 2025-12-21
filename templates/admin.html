@@ -385,6 +385,36 @@
                         <input type="number" id="electionThreshold" placeholder="例如 2（默认是多数阈值）">
                         <small style="color:#666;">如果留空，初始化时会使用多数阈值 (⌈N/2⌉ + 1)</small>
                     </div>
+
+                    <div class="section">
+                        <h3>👮 管理员管理</h3>
+                        <div class="form-group">
+                            <label for="adminName">管理员姓名:</label>
+                            <input type="text" id="adminName" placeholder="请输入管理员姓名">
+                        </div>
+                        <button id="addAdminBtn" onclick="addAdmin(this)" class="btn-info">
+                            ➕ 添加管理员
+                        </button>
+
+                        <div class="candidate-list" id="adminsContainer">
+                            {% for admin in election_data.get('admin_names', ['teacher','secretary']) %}
+                            <div class="candidate-item">
+                                <div class="index">{{ loop.index }}</div>
+                                <div class="name">{{ admin }}</div>
+                                <div style="margin-left:auto; display:flex; gap:8px;">
+                                    <button class="btn-info" onclick="editAdmin('{{ admin|e }}')">编辑</button>
+                                    <button class="btn-danger" onclick="removeAdmin('{{ admin|e }}')">删除</button>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div style="text-align: center; color: #7f8c8d; padding: 20px;">
+                                暂无管理员，请添加管理员
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <small style="color:#666;">创建选举时会把当前管理员列表一并保存，初始化时会生成分片。</small>
+                    </div>
+
                     <button id="createElectionBtn" onclick="createElection(this)" class="btn-primary">
                         🆕 创建新的选举活动
                     </button> 
@@ -544,12 +574,19 @@
 
             try {
                 const threshold = document.getElementById('electionThreshold').value.trim();
+                // 收集当前管理员列表并作为逗号分隔字符串发送
+                const adminEls = document.querySelectorAll('#adminsContainer .name');
+                const domAdmins = Array.from(adminEls).map(el => el.textContent.trim()).filter(Boolean);
+                // 合并 DOM 上显示的管理员与本地暂存 pendingAdmins（避免重复）
+                const merged = Array.from(new Set([...(domAdmins || []), ...(pendingAdmins || [])]));
+                const admins = merged.join(',');
+
                 const response = await fetch('/admin', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/x-www-form-urlencoded',
                     },
-                    body: `action=create_election&title=${encodeURIComponent(title)}&threshold=${encodeURIComponent(threshold)}`
+                    body: `action=create_election&title=${encodeURIComponent(title)}&threshold=${encodeURIComponent(threshold)}&admins=${encodeURIComponent(admins)}`
                 });
 
                 const data = await response.json();
@@ -623,6 +660,142 @@
                 `;
                 container.appendChild(item);
             });
+        }
+
+        // 本地缓存的管理员列表（用于在没有活动选举时先行添加）
+        let pendingAdmins = [];
+
+        // 添加管理员（如果存在当前选举则发请求添加，否则先在本地缓存）
+        async function addAdmin(button) {
+            const name = document.getElementById('adminName').value.trim();
+            if (!name) {
+                showMessage('请输入管理员姓名', 'error');
+                return;
+            }
+
+            const btn = button || document.getElementById('addAdminBtn');
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '🔄 添加中...'; }
+
+            try {
+                // 如果当前存在活动选举且有 id，则请求后台添加
+                if (currentElectionData && currentElectionData.id) {
+                    const response = await fetch('/admin', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                        },
+                        body: `action=add_admin&name=${encodeURIComponent(name)}`
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showMessage('管理员添加成功!', 'success');
+                        updateAdminsList(data.admins || []);
+                        // 同步更新本地 pendingAdmins
+                        pendingAdmins = data.admins || [];
+                        document.getElementById('adminName').value = '';
+                    } else {
+                        showMessage(data.message, 'error');
+                    }
+                } else {
+                    // 无活动选举：把管理员保存在 pendingAdmins 中，等创建选举时一并发送
+                    pendingAdmins.push(name);
+                    updateAdminsList(pendingAdmins);
+                    document.getElementById('adminName').value = '';
+                    showMessage('已在本地添加管理员，创建选举时会一并保存。', 'success');
+                }
+            } catch (error) {
+                showMessage('网络错误: ' + error.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = originalText; }
+            }
+        }
+
+        // 更新管理员列表
+        function updateAdminsList(admins) {
+            pendingAdmins = admins ? admins.slice() : [];
+            const container = document.getElementById('adminsContainer');
+            container.innerHTML = '';
+
+            if (!admins || admins.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #7f8c8d; padding: 20px;">暂无管理员，请添加管理员</div>';
+                return;
+            }
+
+            admins.forEach((admin, index) => {
+                const item = document.createElement('div');
+                item.className = 'candidate-item';
+                item.innerHTML = `
+                    <div class="index">${index + 1}</div>
+                    <div class="name">${admin}</div>
+                    <div style="margin-left:auto; display:flex; gap:8px;">
+                        <button class="btn-info" onclick='editAdmin(${JSON.stringify(admin)})'>编辑</button>
+                        <button class="btn-danger" onclick='removeAdmin(${JSON.stringify(admin)})'>删除</button>
+                    </div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // 编辑管理员
+        async function editAdmin(oldName) {
+            const newName = prompt('请输入新的管理员名称:', oldName);
+            if (!newName || newName.trim() === '' || newName.trim() === oldName) return;
+            try {
+                if (currentElectionData && currentElectionData.id) {
+                    const form = new URLSearchParams();
+                    form.append('action', 'edit_admin');
+                    form.append('old_name', oldName);
+                    form.append('new_name', newName.trim());
+                    const resp = await fetch('/admin', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString() });
+                    const data = await resp.json();
+                    if (data.success) {
+                        showMessage('管理员已更新', 'success');
+                        updateAdminsList(data.admins || []);
+                    } else {
+                        showMessage(data.message || '更新失败', 'error');
+                    }
+                } else {
+                    // 本地更新 pendingAdmins
+                    const idx = pendingAdmins.indexOf(oldName);
+                    if (idx !== -1) {
+                        pendingAdmins[idx] = newName.trim();
+                        updateAdminsList(pendingAdmins);
+                        showMessage('本地管理员已更新（将在创建选举时保存）', 'success');
+                    }
+                }
+            } catch (e) {
+                showMessage('网络错误: ' + e.message, 'error');
+            }
+        }
+
+        // 删除管理员
+        async function removeAdmin(name) {
+            if (!confirm(`确认删除管理员: ${name} ?`)) return;
+            try {
+                if (currentElectionData && currentElectionData.id) {
+                    const form = new URLSearchParams();
+                    form.append('action', 'remove_admin');
+                    form.append('name', name);
+                    const resp = await fetch('/admin', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString() });
+                    const data = await resp.json();
+                    if (data.success) {
+                        showMessage('管理员已删除', 'success');
+                        updateAdminsList(data.admins || []);
+                    } else {
+                        showMessage(data.message || '删除失败', 'error');
+                    }
+                } else {
+                    // 本地删除
+                    pendingAdmins = (pendingAdmins || []).filter(a => a !== name);
+                    updateAdminsList(pendingAdmins);
+                    showMessage('本地管理员已删除（将在创建选举时保存）', 'success');
+                }
+            } catch (e) {
+                showMessage('网络错误: ' + e.message, 'error');
+            }
         }
 
         // 初始化系统
@@ -774,6 +947,11 @@
             // 加载凭证申请列表
             fetchCredentialRequests();
 
+            // 如果有管理员数据，则渲染管理员列表
+            if (currentElectionData && currentElectionData.admin_names) {
+                updateAdminsList(currentElectionData.admin_names);
+            }
+
             // 添加键盘事件
             document.getElementById('electionTitle').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') createElection();
@@ -781,6 +959,10 @@
 
             document.getElementById('candidateName').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') addCandidate();
+            });
+
+            document.getElementById('adminName').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') addAdmin();
             });
         };
 
